@@ -2828,8 +2828,9 @@ ShaderLanguage::Node *ShaderLanguage::_parse_expression(BlockNode *p_block, cons
 						}
 						break;
 					default: {
-						_set_error("Object of type '" + get_datatype_name(expr->get_datatype()) + "' can't be indexed");
-						return NULL;
+						member_type = expr->get_datatype();
+						//_set_error("Object of type '" + get_datatype_name(expr->get_datatype()) + "' can't be indexed");
+						//return NULL;
 					}
 				}
 
@@ -3773,12 +3774,33 @@ Error ShaderLanguage::_parse_shader(const Map<StringName, FunctionInfo> &p_funct
 						uniform.texture_order = -1;
 						uniform.order = uniforms++;
 					}
+
 					uniform.type = type;
 					uniform.precission = precision;
 
 					//todo parse default value
 
 					tk = _get_token();
+
+					while (tk.type == TK_BRACKET_OPEN) {
+						//arrays
+
+						tk = _get_token();
+						if(tk.type != TK_INT_CONSTANT) {
+							_set_error("Expected array length after '['");
+							return ERR_PARSE_ERROR;
+						}
+
+						uniform.array_lengths.push_back((uint16_t)tk.constant);
+
+						tk = _get_token();
+						if(tk.type != TK_BRACKET_CLOSE) {
+							_set_error("Expected ']' after array length");
+							return ERR_PARSE_ERROR;
+						}
+
+						tk = _get_token();
+					}
 
 					if (tk.type == TK_COLON) {
 						//hint

@@ -1883,6 +1883,11 @@ void RasterizerStorageGLES3::shader_get_param_list(RID p_shader, List<PropertyIn
 			} break;
 		};
 
+		if(u.array_lengths.size()) {
+			pi.type = Variant::ARRAY;
+			pi.usage |= PROPERTY_USAGE_EDITOR_HELPER;
+		}
+
 		p_param_list->push_back(pi);
 	}
 }
@@ -2067,10 +2072,30 @@ void RasterizerStorageGLES3::material_set_render_priority(RID p_material, int pr
 	material->render_priority = priority;
 }
 
-_FORCE_INLINE_ static void _fill_std140_variant_ubo_value(ShaderLanguage::DataType type, const Variant &value, uint8_t *data, bool p_linear_color) {
+template <typename VarType, typename GLVarType>
+_FORCE_INLINE_ static void _fill_std140_variant_ubo_value_array(const Variant &value, uint8_t *data, Vector<uint32_t>& array_lengths) {
+	PoolVector<VarType> fv = value;
+	int s = fv.size();
+	GLVarType *gui = (GLVarType *)data;
+
+	typename PoolVector<VarType>::Read r = fv.read();
+	if(array_lengths.size()) { //TODO: multi dimensional arrays
+		for(int j = 0; j < array_lengths[0]; j++) {
+			if (j < s)
+				gui[j*4] = r[j];
+			else
+				gui[j*4] = 0;
+
+			gui[j*4+1] = 0;
+			gui[j*4+2] = 0;
+			gui[j*4+3] = 0;
+		}
+	}
+}
+
+_FORCE_INLINE_ static void _fill_std140_variant_ubo_value(ShaderLanguage::DataType type, const Variant &value, uint8_t *data, bool p_linear_color, Vector<uint32_t>& array_lengths) {
 	switch (type) {
 		case ShaderLanguage::TYPE_BOOL: {
-
 			bool v = value;
 
 			GLuint *gui = (GLuint *)data;
@@ -2104,10 +2129,13 @@ _FORCE_INLINE_ static void _fill_std140_variant_ubo_value(ShaderLanguage::DataTy
 
 		} break;
 		case ShaderLanguage::TYPE_INT: {
-
-			int v = value;
-			GLint *gui = (GLint *)data;
-			gui[0] = v;
+			if(array_lengths.size()) {
+				_fill_std140_variant_ubo_value_array<int, GLint>(value, data, array_lengths);
+			} else {
+				int v = value;
+				GLint *gui = (GLint *)data;
+				gui[0] = v;
+			}
 
 		} break;
 		case ShaderLanguage::TYPE_IVEC2: {
@@ -2157,10 +2185,13 @@ _FORCE_INLINE_ static void _fill_std140_variant_ubo_value(ShaderLanguage::DataTy
 			}
 		} break;
 		case ShaderLanguage::TYPE_UINT: {
-
-			int v = value;
-			GLuint *gui = (GLuint *)data;
-			gui[0] = v;
+			if(array_lengths.size()) {
+				_fill_std140_variant_ubo_value_array<int, GLuint>(value, data, array_lengths);
+			} else {
+				int v = value;
+				GLuint *gui = (GLuint *)data;
+				gui[0] = v;
+			}
 
 		} break;
 		case ShaderLanguage::TYPE_UVEC2: {
@@ -2208,9 +2239,13 @@ _FORCE_INLINE_ static void _fill_std140_variant_ubo_value(ShaderLanguage::DataTy
 			}
 		} break;
 		case ShaderLanguage::TYPE_FLOAT: {
-			float v = value;
-			GLfloat *gui = (GLfloat *)data;
-			gui[0] = v;
+			if(array_lengths.size()) {
+				_fill_std140_variant_ubo_value_array<float, GLfloat>(value, data, array_lengths);
+			} else {
+				float v = value;
+				GLfloat *gui = (GLfloat *)data;
+				gui[0] = v;
+			}
 
 		} break;
 		case ShaderLanguage::TYPE_VEC2: {
@@ -2623,7 +2658,7 @@ void RasterizerStorageGLES3::_update_material(Material *material) {
 
 			if (V) {
 				//user provided
-				_fill_std140_variant_ubo_value(E->get().type, V->get(), data, material->shader->mode == VS::SHADER_SPATIAL);
+				_fill_std140_variant_ubo_value(E->get().type, V->get(), data, material->shader->mode == VS::SHADER_SPATIAL, E->get().array_lengths);
 
 			} else if (E->get().default_value.size()) {
 				//default value
@@ -2633,7 +2668,7 @@ void RasterizerStorageGLES3::_update_material(Material *material) {
 				//zero because it was not provided
 				if (E->get().type == ShaderLanguage::TYPE_VEC4 && E->get().hint == ShaderLanguage::ShaderNode::Uniform::HINT_COLOR) {
 					//colors must be set as black, with alpha as 1.0
-					_fill_std140_variant_ubo_value(E->get().type, Color(0, 0, 0, 1), data, material->shader->mode == VS::SHADER_SPATIAL);
+					_fill_std140_variant_ubo_value(E->get().type, Color(0, 0, 0, 1), data, material->shader->mode == VS::SHADER_SPATIAL, E->get().array_lengths);
 				} else {
 					//else just zero it out
 					_fill_std140_ubo_empty(E->get().type, data);

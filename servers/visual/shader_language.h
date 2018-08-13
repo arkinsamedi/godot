@@ -462,6 +462,9 @@ public:
 
 			int order;
 			int texture_order;
+
+			Vector<uint32_t> array_lengths;
+
 			DataType type;
 			DataPrecision precission;
 			Vector<ConstantNode::Value> default_value;
