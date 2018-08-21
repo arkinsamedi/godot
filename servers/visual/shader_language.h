@@ -316,9 +316,11 @@ public:
 	};
 
 	struct VariableNode : public Node {
+		Vector<uint32_t> array_lengths;
 		DataType datatype_cache;
 		StringName name;
 		virtual DataType get_datatype() const { return datatype_cache; }
+		virtual bool is_array() const { return !array_lengths.empty(); }
 
 		VariableNode() {
 			type = TYPE_VARIABLE;
@@ -617,7 +619,7 @@ private:
 		IDENTIFIER_BUILTIN_VAR,
 	};
 
-	bool _find_identifier(const BlockNode *p_block, const Map<StringName, BuiltInInfo> &p_builtin_types, const StringName &p_identifier, DataType *r_data_type = NULL, IdentifierType *r_type = NULL);
+	bool _find_identifier(const BlockNode *p_block, const Map<StringName, BuiltInInfo> &p_builtin_types, const StringName &p_identifier, DataType *r_data_type = NULL, IdentifierType *r_type = NULL, Vector<uint32_t>* array_lengths = NULL);
 
 	bool _is_operator_assign(Operator p_op) const;
 	bool _validate_assign(Node *p_node, const Map<StringName, BuiltInInfo> &p_builtin_types, String *r_message = NULL);

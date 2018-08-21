@@ -762,7 +762,7 @@ void ShaderLanguage::clear() {
 	}
 }
 
-bool ShaderLanguage::_find_identifier(const BlockNode *p_block, const Map<StringName, BuiltInInfo> &p_builtin_types, const StringName &p_identifier, DataType *r_data_type, IdentifierType *r_type) {
+bool ShaderLanguage::_find_identifier(const BlockNode *p_block, const Map<StringName, BuiltInInfo> &p_builtin_types, const StringName &p_identifier, DataType *r_data_type, IdentifierType *r_type, Vector<uint32_t>* array_lengths) {
 
 	if (p_builtin_types.has(p_identifier)) {
 
@@ -831,6 +831,9 @@ bool ShaderLanguage::_find_identifier(const BlockNode *p_block, const Map<String
 		}
 		if (r_type) {
 			*r_type = IDENTIFIER_UNIFORM;
+		}
+		if (array_lengths) {
+			*array_lengths = shader->uniforms[p_identifier].array_lengths;
 		}
 		return true;
 	}
@@ -2534,8 +2537,9 @@ ShaderLanguage::Node *ShaderLanguage::_parse_expression(BlockNode *p_block, cons
 
 				DataType data_type;
 				IdentifierType ident_type;
+				Vector<uint32_t> array_lengths;
 
-				if (!_find_identifier(p_block, p_builtin_types, identifier, &data_type, &ident_type)) {
+				if (!_find_identifier(p_block, p_builtin_types, identifier, &data_type, &ident_type, &array_lengths)) {
 					_set_error("Unknown identifier in expression: " + String(identifier));
 					return NULL;
 				}
@@ -2548,6 +2552,7 @@ ShaderLanguage::Node *ShaderLanguage::_parse_expression(BlockNode *p_block, cons
 				VariableNode *varname = alloc_node<VariableNode>();
 				varname->name = identifier;
 				varname->datatype_cache = data_type;
+				varname->array_lengths = array_lengths;
 				expr = varname;
 			}
 
@@ -2752,85 +2757,88 @@ ShaderLanguage::Node *ShaderLanguage::_parse_expression(BlockNode *p_block, cons
 				}
 
 				DataType member_type = TYPE_VOID;
-
-				switch (expr->get_datatype()) {
-					case TYPE_BVEC2:
-					case TYPE_VEC2:
-					case TYPE_IVEC2:
-					case TYPE_UVEC2:
-					case TYPE_MAT2:
-						if (index->type == Node::TYPE_CONSTANT) {
-							uint32_t index_constant = static_cast<ConstantNode *>(index)->values[0].uint;
-							if (index_constant >= 2) {
-								_set_error("Index out of range (0-1)");
+				VariableNode* var_expr = dynamic_cast<VariableNode *>(expr);
+				if(var_expr && var_expr->is_array()) {
+					member_type = expr->get_datatype();
+				} else {
+					switch (expr->get_datatype()) {
+						case TYPE_BVEC2:
+						case TYPE_VEC2:
+						case TYPE_IVEC2:
+						case TYPE_UVEC2:
+						case TYPE_MAT2:
+							if (index->type == Node::TYPE_CONSTANT) {
+								uint32_t index_constant = static_cast<ConstantNode *>(index)->values[0].uint;
+								if (index_constant >= 2) {
+									_set_error("Index out of range (0-1)");
+									return NULL;
+								}
+							} else {
+								_set_error("Only integer constants are allowed as index at the moment");
 								return NULL;
 							}
-						} else {
-							_set_error("Only integer constants are allowed as index at the moment");
-							return NULL;
-						}
 
-						switch (expr->get_datatype()) {
-							case TYPE_BVEC2: member_type = TYPE_BOOL; break;
-							case TYPE_VEC2: member_type = TYPE_FLOAT; break;
-							case TYPE_IVEC2: member_type = TYPE_INT; break;
-							case TYPE_UVEC2: member_type = TYPE_UINT; break;
-							case TYPE_MAT2: member_type = TYPE_VEC2; break;
-						}
+							switch (expr->get_datatype()) {
+								case TYPE_BVEC2: member_type = TYPE_BOOL; break;
+								case TYPE_VEC2: member_type = TYPE_FLOAT; break;
+								case TYPE_IVEC2: member_type = TYPE_INT; break;
+								case TYPE_UVEC2: member_type = TYPE_UINT; break;
+								case TYPE_MAT2: member_type = TYPE_VEC2; break;
+							}
 
-						break;
-					case TYPE_BVEC3:
-					case TYPE_VEC3:
-					case TYPE_IVEC3:
-					case TYPE_UVEC3:
-					case TYPE_MAT3:
-						if (index->type == Node::TYPE_CONSTANT) {
-							uint32_t index_constant = static_cast<ConstantNode *>(index)->values[0].uint;
-							if (index_constant >= 3) {
-								_set_error("Index out of range (0-2)");
+							break;
+						case TYPE_BVEC3:
+						case TYPE_VEC3:
+						case TYPE_IVEC3:
+						case TYPE_UVEC3:
+						case TYPE_MAT3:
+							if (index->type == Node::TYPE_CONSTANT) { //[AS] TODO:
+								uint32_t index_constant = static_cast<ConstantNode *>(index)->values[0].uint;
+								if (index_constant >= 3) {
+									_set_error("Index out of range (0-2)");
+									return NULL;
+								}
+							} else {
+								_set_error("Only integer constants are allowed as index at the moment");
 								return NULL;
 							}
-						} else {
-							_set_error("Only integer constants are allowed as index at the moment");
-							return NULL;
-						}
 
-						switch (expr->get_datatype()) {
-							case TYPE_BVEC3: member_type = TYPE_BOOL; break;
-							case TYPE_VEC3: member_type = TYPE_FLOAT; break;
-							case TYPE_IVEC3: member_type = TYPE_INT; break;
-							case TYPE_UVEC3: member_type = TYPE_UINT; break;
-							case TYPE_MAT3: member_type = TYPE_VEC3; break;
-						}
-						break;
-					case TYPE_BVEC4:
-					case TYPE_VEC4:
-					case TYPE_IVEC4:
-					case TYPE_UVEC4:
-					case TYPE_MAT4:
-						if (index->type == Node::TYPE_CONSTANT) {
-							uint32_t index_constant = static_cast<ConstantNode *>(index)->values[0].uint;
-							if (index_constant >= 4) {
-								_set_error("Index out of range (0-3)");
+							switch (expr->get_datatype()) {
+								case TYPE_BVEC3: member_type = TYPE_BOOL; break;
+								case TYPE_VEC3: member_type = TYPE_FLOAT; break;
+								case TYPE_IVEC3: member_type = TYPE_INT; break;
+								case TYPE_UVEC3: member_type = TYPE_UINT; break;
+								case TYPE_MAT3: member_type = TYPE_VEC3; break;
+							}
+							break;
+						case TYPE_BVEC4:
+						case TYPE_VEC4:
+						case TYPE_IVEC4:
+						case TYPE_UVEC4:
+						case TYPE_MAT4:
+							if (index->type == Node::TYPE_CONSTANT) {
+								uint32_t index_constant = static_cast<ConstantNode *>(index)->values[0].uint;
+								if (index_constant >= 4) {
+									_set_error("Index out of range (0-3)");
+									return NULL;
+								}
+							} else {
+								_set_error("Only integer constants are allowed as index at the moment");
 								return NULL;
 							}
-						} else {
-							_set_error("Only integer constants are allowed as index at the moment");
+
+							switch (expr->get_datatype()) {
+								case TYPE_BVEC4: member_type = TYPE_BOOL; break;
+								case TYPE_VEC4: member_type = TYPE_FLOAT; break;
+								case TYPE_IVEC4: member_type = TYPE_INT; break;
+								case TYPE_UVEC4: member_type = TYPE_UINT; break;
+								case TYPE_MAT4: member_type = TYPE_VEC4; break;
+							}
+							break;
+						default: {
+							_set_error("Object of type '" + get_datatype_name(expr->get_datatype()) + "' can't be indexed");
 							return NULL;
 						}
-
-						switch (expr->get_datatype()) {
-							case TYPE_BVEC4: member_type = TYPE_BOOL; break;
-							case TYPE_VEC4: member_type = TYPE_FLOAT; break;
-							case TYPE_IVEC4: member_type = TYPE_INT; break;
-							case TYPE_UVEC4: member_type = TYPE_UINT; break;
-							case TYPE_MAT4: member_type = TYPE_VEC4; break;
-						}
-						break;
-					default: {
-						member_type = expr->get_datatype();
-						//_set_error("Object of type '" + get_datatype_name(expr->get_datatype()) + "' can't be indexed");
-						//return NULL;
 					}
 				}
 

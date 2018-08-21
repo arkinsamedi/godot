@@ -51,46 +51,50 @@ static String _typestr(SL::DataType p_type) {
 
 static int _get_datatype_size(SL::DataType p_type, Vector<uint32_t>& array_lengths) {
 
-	if(array_lengths.size() > 0) {
-		int datatype_size = 0;
+	int datatype_size = 0;
+	switch (p_type) {
+		case SL::TYPE_VOID: datatype_size = 0; break;
+		case SL::TYPE_BOOL: datatype_size = 4; break;
+		case SL::TYPE_BVEC2: datatype_size = 8; break;
+		case SL::TYPE_BVEC3: datatype_size = 12; break;
+		case SL::TYPE_BVEC4: datatype_size = 16; break;
+		case SL::TYPE_INT: datatype_size = 4; break;
+		case SL::TYPE_IVEC2: datatype_size = 8; break;
+		case SL::TYPE_IVEC3: datatype_size = 12; break;
+		case SL::TYPE_IVEC4: datatype_size = 16; break;
+		case SL::TYPE_UINT: datatype_size = 4; break;
+		case SL::TYPE_UVEC2: datatype_size = 8; break;
+		case SL::TYPE_UVEC3: datatype_size = 12; break;
+		case SL::TYPE_UVEC4: datatype_size = 16; break;
+		case SL::TYPE_FLOAT: datatype_size = 4; break;
+		case SL::TYPE_VEC2: datatype_size = 8; break;
+		case SL::TYPE_VEC3: datatype_size = 12; break;
+		case SL::TYPE_VEC4: datatype_size = 16; break;
+		case SL::TYPE_MAT2:
+			datatype_size = 32; //4 * 4 + 4 * 4
+			 break;
+		case SL::TYPE_MAT3:
+			datatype_size = 48; // 4 * 4 + 4 * 4 + 4 * 4
+			 break;
+		case SL::TYPE_MAT4: datatype_size = 64; break;
+		case SL::TYPE_SAMPLER2D: datatype_size = 16; break;
+		case SL::TYPE_ISAMPLER2D: datatype_size = 16; break;
+		case SL::TYPE_USAMPLER2D: datatype_size = 16; break;
+		case SL::TYPE_SAMPLERCUBE: datatype_size = 16; break;
+		default: ERR_FAIL_V(0);
+	}
+
+	if(array_lengths.size()) {
+		int element_datatype_size = datatype_size < 16 ? 16 : datatype_size;
+		datatype_size = 0;
 		for(int i = 0; i < array_lengths.size(); i++) {
-			datatype_size += 16 * array_lengths[i];
-		}
-
-		return datatype_size;
-	} else {
-		switch (p_type) {
-
-			case SL::TYPE_VOID: return 0;
-			case SL::TYPE_BOOL: return 4;
-			case SL::TYPE_BVEC2: return 8;
-			case SL::TYPE_BVEC3: return 12;
-			case SL::TYPE_BVEC4: return 16;
-			case SL::TYPE_INT: return 4;
-			case SL::TYPE_IVEC2: return 8;
-			case SL::TYPE_IVEC3: return 12;
-			case SL::TYPE_IVEC4: return 16;
-			case SL::TYPE_UINT: return 4;
-			case SL::TYPE_UVEC2: return 8;
-			case SL::TYPE_UVEC3: return 12;
-			case SL::TYPE_UVEC4: return 16;
-			case SL::TYPE_FLOAT: return 4;
-			case SL::TYPE_VEC2: return 8;
-			case SL::TYPE_VEC3: return 12;
-			case SL::TYPE_VEC4: return 16;
-			case SL::TYPE_MAT2:
-				return 32; //4 * 4 + 4 * 4
-			case SL::TYPE_MAT3:
-				return 48; // 4 * 4 + 4 * 4 + 4 * 4
-			case SL::TYPE_MAT4: return 64;
-			case SL::TYPE_SAMPLER2D: return 16;
-			case SL::TYPE_ISAMPLER2D: return 16;
-			case SL::TYPE_USAMPLER2D: return 16;
-			case SL::TYPE_SAMPLERCUBE: return 16;
+			datatype_size += element_datatype_size * array_lengths[i];
 		}
 	}
 
-	ERR_FAIL_V(0);
+	return datatype_size;
+
+
 }
 
 static int _get_datatype_alignment(SL::DataType p_type, Vector<uint32_t>& array_lengths) {
@@ -410,6 +414,7 @@ String ShaderCompilerGLES3::_dump_node_code(SL::Node *p_node, int p_level, Gener
 				}
 
 				r_gen_code.uniform_offsets.push_back(offset);
+				r_gen_code.uniform_sizes.push_back(uniform_sizes[i]);
 
 				offset += uniform_sizes[i];
 			}

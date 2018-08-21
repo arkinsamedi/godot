@@ -399,6 +399,7 @@ public:
 
 		Map<StringName, ShaderLanguage::ShaderNode::Uniform> uniforms;
 		Vector<uint32_t> ubo_offsets;
+		Vector<uint32_t> ubo_sizes;
 		uint32_t ubo_size;
 
 		uint32_t texture_count;

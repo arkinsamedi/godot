@@ -1763,6 +1763,7 @@ void RasterizerStorageGLES3::_update_shader(Shader *p_shader) const {
 
 	p_shader->ubo_size = gen_code.uniform_total_size;
 	p_shader->ubo_offsets = gen_code.uniform_offsets;
+	p_shader->ubo_sizes = gen_code.uniform_sizes;
 	p_shader->texture_count = gen_code.texture_uniforms.size();
 	p_shader->texture_hints = gen_code.texture_hints;
 
@@ -2093,7 +2094,7 @@ _FORCE_INLINE_ static void _fill_std140_variant_ubo_value_array(const Variant &v
 	}
 }
 
-_FORCE_INLINE_ static void _fill_std140_variant_ubo_value(ShaderLanguage::DataType type, const Variant &value, uint8_t *data, bool p_linear_color, Vector<uint32_t>& array_lengths) {
+_FORCE_INLINE_ static void _fill_std140_variant_ubo_value(ShaderLanguage::DataType type, const Variant &value, uint8_t *data, bool p_linear_color) {
 	switch (type) {
 		case ShaderLanguage::TYPE_BOOL: {
 			bool v = value;
@@ -2129,13 +2130,10 @@ _FORCE_INLINE_ static void _fill_std140_variant_ubo_value(ShaderLanguage::DataTy
 
 		} break;
 		case ShaderLanguage::TYPE_INT: {
-			if(array_lengths.size()) {
-				_fill_std140_variant_ubo_value_array<int, GLint>(value, data, array_lengths);
-			} else {
-				int v = value;
-				GLint *gui = (GLint *)data;
-				gui[0] = v;
-			}
+
+			int v = value;
+			GLint *gui = (GLint *)data;
+			gui[0] = v;
 
 		} break;
 		case ShaderLanguage::TYPE_IVEC2: {
@@ -2185,13 +2183,10 @@ _FORCE_INLINE_ static void _fill_std140_variant_ubo_value(ShaderLanguage::DataTy
 			}
 		} break;
 		case ShaderLanguage::TYPE_UINT: {
-			if(array_lengths.size()) {
-				_fill_std140_variant_ubo_value_array<int, GLuint>(value, data, array_lengths);
-			} else {
-				int v = value;
-				GLuint *gui = (GLuint *)data;
-				gui[0] = v;
-			}
+
+			int v = value;
+			GLuint *gui = (GLuint *)data;
+			gui[0] = v;
 
 		} break;
 		case ShaderLanguage::TYPE_UVEC2: {
@@ -2239,16 +2234,14 @@ _FORCE_INLINE_ static void _fill_std140_variant_ubo_value(ShaderLanguage::DataTy
 			}
 		} break;
 		case ShaderLanguage::TYPE_FLOAT: {
-			if(array_lengths.size()) {
-				_fill_std140_variant_ubo_value_array<float, GLfloat>(value, data, array_lengths);
-			} else {
-				float v = value;
-				GLfloat *gui = (GLfloat *)data;
-				gui[0] = v;
-			}
+
+			float v = value;
+			GLfloat *gui = (GLfloat *)data;
+			gui[0] = v;
 
 		} break;
 		case ShaderLanguage::TYPE_VEC2: {
+			PoolVector<float> iv = value;
 			Vector2 v = value;
 			GLfloat *gui = (GLfloat *)data;
 			gui[0] = v.x;
@@ -2256,6 +2249,7 @@ _FORCE_INLINE_ static void _fill_std140_variant_ubo_value(ShaderLanguage::DataTy
 
 		} break;
 		case ShaderLanguage::TYPE_VEC3: {
+			PoolVector<float> iv = value;
 			Vector3 v = value;
 			GLfloat *gui = (GLfloat *)data;
 			gui[0] = v.x;
@@ -2652,13 +2646,22 @@ void RasterizerStorageGLES3::_update_material(Material *material) {
 			//	print_line("uniform " + String(E->key()) + " order " + itos(E->get().order) + " offset " + itos(material->shader->ubo_offsets[E->get().order]));
 			//}
 			//regular uniform
+			int size = material->shader->ubo_sizes[E->get().order];
 			uint8_t *data = &local_ubo[material->shader->ubo_offsets[E->get().order]];
 
 			Map<StringName, Variant>::Element *V = material->params.find(E->key());
 
 			if (V) {
 				//user provided
-				_fill_std140_variant_ubo_value(E->get().type, V->get(), data, material->shader->mode == VS::SHADER_SPATIAL, E->get().array_lengths);
+				if(E->get().array_lengths.size()) {
+					Array val = V->get();
+					int array_offset = size / E->get().array_lengths[0];
+					for(int i=0; i < E->get().array_lengths[0] && i < val.size(); i++, data += array_offset) {
+						_fill_std140_variant_ubo_value(E->get().type, val[i], data, material->shader->mode == VS::SHADER_SPATIAL);
+					}
+				} else {
+					_fill_std140_variant_ubo_value(E->get().type, V->get(), data, material->shader->mode == VS::SHADER_SPATIAL);
+				}
 
 			} else if (E->get().default_value.size()) {
 				//default value
@@ -2668,7 +2671,15 @@ void RasterizerStorageGLES3::_update_material(Material *material) {
 				//zero because it was not provided
 				if (E->get().type == ShaderLanguage::TYPE_VEC4 && E->get().hint == ShaderLanguage::ShaderNode::Uniform::HINT_COLOR) {
 					//colors must be set as black, with alpha as 1.0
-					_fill_std140_variant_ubo_value(E->get().type, Color(0, 0, 0, 1), data, material->shader->mode == VS::SHADER_SPATIAL, E->get().array_lengths);
+					if(E->get().array_lengths.size()) {
+						Array val = V->get();
+						int array_offset = size / E->get().array_lengths[0];
+						for(int i=0; i < E->get().array_lengths[0] && i < val.size(); i++, data += array_offset) {
+							_fill_std140_variant_ubo_value(E->get().type, Color(0, 0, 0, 1), data, material->shader->mode == VS::SHADER_SPATIAL);
+						}
+					} else {
+						_fill_std140_variant_ubo_value(E->get().type, Color(0, 0, 0, 1), data, material->shader->mode == VS::SHADER_SPATIAL);
+					}
 				} else {
 					//else just zero it out
 					_fill_std140_ubo_empty(E->get().type, data);
