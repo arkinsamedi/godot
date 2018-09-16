@@ -222,7 +222,7 @@ public:
 
 		const Vector<ShaderLanguage::ConstantNode::Value> &values = value.second;
 
-		switch (value.first) {
+		switch (value.first.primitive_type) {
 			case ShaderLanguage::TYPE_BOOL: {
 				glUniform1i(p_uniform, values[0].boolean);
 			} break;

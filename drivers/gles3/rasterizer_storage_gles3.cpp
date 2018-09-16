@@ -1812,7 +1812,7 @@ void RasterizerStorageGLES3::shader_get_param_list(RID p_shader, List<PropertyIn
 		PropertyInfo pi;
 		ShaderLanguage::ShaderNode::Uniform &u = shader->uniforms[E->get()];
 		pi.name = E->get();
-		switch (u.type) {
+		switch (u.type.primitive_type) {
 			case ShaderLanguage::TYPE_VOID: pi.type = Variant::NIL; break;
 			case ShaderLanguage::TYPE_BOOL: pi.type = Variant::BOOL; break;
 			case ShaderLanguage::TYPE_BVEC2:
@@ -2095,7 +2095,15 @@ _FORCE_INLINE_ static void _fill_std140_variant_ubo_value_array(const Variant &v
 }
 
 _FORCE_INLINE_ static void _fill_std140_variant_ubo_value(ShaderLanguage::DataType type, const Variant &value, uint8_t *data, bool p_linear_color) {
-	switch (type) {
+
+	ShaderLanguage::PrimitiveType pt = type.primitive_type;
+
+	if(pt == ShaderLanguage::TYPE_ARRAY) {
+		ShaderLanguage::DataStructureArray* arr_struct = static_cast<ShaderLanguage::DataStructureArray*>(type.structure);
+		pt = arr_struct->element_type.primitive_type;
+	}
+
+	switch (pt) {
 		case ShaderLanguage::TYPE_BOOL: {
 			bool v = value;
 
@@ -2355,7 +2363,7 @@ _FORCE_INLINE_ static void _fill_std140_variant_ubo_value(ShaderLanguage::DataTy
 
 _FORCE_INLINE_ static void _fill_std140_ubo_value(ShaderLanguage::DataType type, const Vector<ShaderLanguage::ConstantNode::Value> &value, uint8_t *data) {
 
-	switch (type) {
+	switch (type.primitive_type) {
 		case ShaderLanguage::TYPE_BOOL: {
 
 			GLuint *gui = (GLuint *)data;
@@ -2523,7 +2531,7 @@ _FORCE_INLINE_ static void _fill_std140_ubo_value(ShaderLanguage::DataType type,
 
 _FORCE_INLINE_ static void _fill_std140_ubo_empty(ShaderLanguage::DataType type, uint8_t *data) {
 
-	switch (type) {
+	switch (type.primitive_type) {
 
 		case ShaderLanguage::TYPE_BOOL:
 		case ShaderLanguage::TYPE_INT:
@@ -2669,7 +2677,7 @@ void RasterizerStorageGLES3::_update_material(Material *material) {
 				//value=E->get().default_value;
 			} else {
 				//zero because it was not provided
-				if (E->get().type == ShaderLanguage::TYPE_VEC4 && E->get().hint == ShaderLanguage::ShaderNode::Uniform::HINT_COLOR) {
+				if (E->get().type.primitive_type == ShaderLanguage::TYPE_VEC4 && E->get().hint == ShaderLanguage::ShaderNode::Uniform::HINT_COLOR) {
 					//colors must be set as black, with alpha as 1.0
 					if(E->get().array_lengths.size()) {
 						Array val = V->get();

@@ -45,7 +45,7 @@ static String _mktab(int p_level) {
 	return tb;
 }
 
-static String _typestr(SL::DataType p_type) {
+static String _typestr(const SL::DataType& p_type) {
 
 	return ShaderLanguage::get_datatype_name(p_type);
 }
@@ -93,9 +93,9 @@ static String f2sp0(float p_float) {
 		return rtoss(p_float);
 }
 
-static String get_constant_text(SL::DataType p_type, const Vector<SL::ConstantNode::Value> &p_values) {
+static String get_constant_text(SL::DataType& p_type, const Vector<SL::ConstantNode::Value> &p_values) {
 
-	switch (p_type) {
+	switch (p_type.primitive_type) {
 		case SL::TYPE_BOOL: return p_values[0].boolean ? "true" : "false";
 		case SL::TYPE_BVEC2:
 		case SL::TYPE_BVEC3:
@@ -104,7 +104,7 @@ static String get_constant_text(SL::DataType p_type, const Vector<SL::ConstantNo
 			StringBuffer<> text;
 
 			text += "bvec";
-			text += itos(p_type - SL::TYPE_BOOL + 1);
+			text += itos(p_type.primitive_type - SL::TYPE_BOOL + 1);
 			text += "(";
 
 			for (int i = 0; i < p_values.size(); i++) {
@@ -126,7 +126,7 @@ static String get_constant_text(SL::DataType p_type, const Vector<SL::ConstantNo
 			StringBuffer<> text;
 
 			text += "ivec";
-			text += itos(p_type - SL::TYPE_UINT + 1);
+			text += itos(p_type.primitive_type - SL::TYPE_UINT + 1);
 			text += "(";
 
 			for (int i = 0; i < p_values.size(); i++) {
@@ -148,7 +148,7 @@ static String get_constant_text(SL::DataType p_type, const Vector<SL::ConstantNo
 			StringBuffer<> text;
 
 			text += "ivec";
-			text += itos(p_type - SL::TYPE_INT + 1);
+			text += itos(p_type.primitive_type - SL::TYPE_INT + 1);
 			text += "(";
 
 			for (int i = 0; i < p_values.size(); i++) {
@@ -169,7 +169,7 @@ static String get_constant_text(SL::DataType p_type, const Vector<SL::ConstantNo
 			StringBuffer<> text;
 
 			text += "vec";
-			text += itos(p_type - SL::TYPE_FLOAT + 1);
+			text += itos(p_type.primitive_type - SL::TYPE_FLOAT + 1);
 			text += "(";
 
 			for (int i = 0; i < p_values.size(); i++) {
@@ -189,7 +189,7 @@ static String get_constant_text(SL::DataType p_type, const Vector<SL::ConstantNo
 			StringBuffer<> text;
 
 			text += "mat";
-			text += itos(p_type - SL::TYPE_MAT2 + 2);
+			text += itos(p_type.primitive_type - SL::TYPE_MAT2 + 2);
 			text += "(";
 
 			for (int i = 0; i < p_values.size(); i++) {
@@ -251,7 +251,7 @@ void ShaderCompilerGLES2::_dump_function_deps(SL::ShaderNode *p_node, const Stri
 				header += ", ";
 
 			header += _qualstr(fnode->arguments[i].qualifier);
-			header += _prestr(fnode->arguments[i].precision);
+			header += _prestr(fnode->arguments[i].type.precision);
 			header += _typestr(fnode->arguments[i].type);
 			header += " ";
 			header += _mkid(fnode->arguments[i].name);
@@ -318,7 +318,7 @@ String ShaderCompilerGLES2::_dump_node_code(SL::Node *p_node, int p_level, Gener
 
 				uniform_code += "uniform ";
 
-				uniform_code += _prestr(E->get().precission);
+				uniform_code += _prestr(E->get().type.precision);
 				uniform_code += _typestr(E->get().type);
 				uniform_code += " ";
 				uniform_code += _mkid(E->key());
@@ -339,13 +339,13 @@ String ShaderCompilerGLES2::_dump_node_code(SL::Node *p_node, int p_level, Gener
 
 			// varyings
 
-			for (Map<StringName, SL::ShaderNode::Varying>::Element *E = snode->varyings.front(); E; E = E->next()) {
+			for (Map<StringName, SL::DataType>::Element *E = snode->varyings.front(); E; E = E->next()) {
 
 				StringBuffer<> varying_code;
 
 				varying_code += "varying ";
-				varying_code += _prestr(E->get().precission);
-				varying_code += _typestr(E->get().type);
+				varying_code += _prestr(E->get().precision);
+				varying_code += _typestr(E->get());
 				varying_code += " ";
 				varying_code += _mkid(E->key());
 				varying_code += ";\n";
@@ -429,7 +429,7 @@ String ShaderCompilerGLES2::_dump_node_code(SL::Node *p_node, int p_level, Gener
 
 			StringBuffer<> declaration;
 
-			declaration += _prestr(var_dec_node->precision);
+			declaration += _prestr(var_dec_node->datatype.precision);
 			declaration += _typestr(var_dec_node->datatype);
 
 			for (int i = 0; i < var_dec_node->declarations.size(); i++) {
@@ -555,24 +555,24 @@ String ShaderCompilerGLES2::_dump_node_code(SL::Node *p_node, int p_level, Gener
 						if (var_node->name == "texture") {
 							// emit texture call
 
-							if (op_node->arguments[1]->get_datatype() == SL::TYPE_SAMPLER2D) {
+							if (op_node->arguments[1]->get_datatype().primitive_type == SL::TYPE_SAMPLER2D) {
 								code += "texture2D";
-							} else if (op_node->arguments[1]->get_datatype() == SL::TYPE_SAMPLERCUBE) {
+							} else if (op_node->arguments[1]->get_datatype().primitive_type == SL::TYPE_SAMPLERCUBE) {
 								code += "textureCube";
 							}
 
 						} else if (var_node->name == "textureLod") {
 							// emit texture call
 
-							if (op_node->arguments[1]->get_datatype() == SL::TYPE_SAMPLER2D) {
+							if (op_node->arguments[1]->get_datatype().primitive_type == SL::TYPE_SAMPLER2D) {
 								code += "texture2DLod";
-							} else if (op_node->arguments[1]->get_datatype() == SL::TYPE_SAMPLERCUBE) {
+							} else if (op_node->arguments[1]->get_datatype().primitive_type == SL::TYPE_SAMPLERCUBE) {
 								code += "textureCubeLod";
 							}
 
 						} else if (var_node->name == "mix") {
 
-							switch (op_node->arguments[3]->get_datatype()) {
+							switch (op_node->arguments[3]->get_datatype().primitive_type) {
 
 								case SL::TYPE_BVEC2: {
 									code += "select2";
@@ -596,7 +596,7 @@ String ShaderCompilerGLES2::_dump_node_code(SL::Node *p_node, int p_level, Gener
 
 								default: {
 									SL::DataType type = op_node->arguments[3]->get_datatype();
-									print_line(String("uhhhh invalid mix with type: ") + itos(type));
+									print_line(String("uhhhh invalid mix with type: ") + itos(type.primitive_type));
 								} break;
 							}
 

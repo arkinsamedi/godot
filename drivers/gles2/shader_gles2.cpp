@@ -751,7 +751,7 @@ void ShaderGLES2::use_material(void *p_material, int p_num_predef_textures) {
 		if (V) {
 			value.second = Vector<ShaderLanguage::ConstantNode::Value>();
 			value.second.resize(E->get().default_value.size());
-			switch (E->get().type) {
+			switch (E->get().type.primitive_type) {
 				case ShaderLanguage::TYPE_BOOL: {
 					if (value.second.size() < 1)
 						value.second.resize(1);
@@ -943,7 +943,7 @@ void ShaderGLES2::use_material(void *p_material, int p_num_predef_textures) {
 				// No default value set... weird, let's just use zero for everything
 				size_t default_arg_size = 1;
 				bool is_float = false;
-				switch (E->get().type) {
+				switch (E->get().type.primitive_type) {
 					case ShaderLanguage::TYPE_BOOL:
 					case ShaderLanguage::TYPE_INT:
 					case ShaderLanguage::TYPE_UINT: {
@@ -1032,7 +1032,7 @@ void ShaderGLES2::use_material(void *p_material, int p_num_predef_textures) {
 	for (int i = 0; i < tc; i++) {
 
 		Pair<ShaderLanguage::DataType, Vector<ShaderLanguage::ConstantNode::Value> > value;
-		value.first = ShaderLanguage::TYPE_INT;
+		value.first.primitive_type = ShaderLanguage::TYPE_INT;
 		value.second.resize(1);
 		value.second.write[0].sint = p_num_predef_textures + i;
 

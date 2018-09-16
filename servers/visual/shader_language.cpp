@@ -665,7 +665,7 @@ bool ShaderLanguage::is_token_datatype(TokenType p_type) {
 
 ShaderLanguage::DataType ShaderLanguage::get_token_datatype(TokenType p_type) {
 
-	return DataType(p_type - TK_TYPE_VOID);
+	return DataType(static_cast<PrimitiveType>(p_type - TK_TYPE_VOID));
 }
 
 bool ShaderLanguage::is_token_interpolation(TokenType p_type) {
@@ -704,9 +704,16 @@ ShaderLanguage::DataPrecision ShaderLanguage::get_token_precision(TokenType p_ty
 		return PRECISION_MEDIUMP;
 }
 
-String ShaderLanguage::get_datatype_name(DataType p_type) {
+String ShaderLanguage::get_datatype_name(const DataType& p_type) {
 
-	switch (p_type) {
+	PrimitiveType pt = p_type.primitive_type;
+
+	if(pt == TYPE_ARRAY) {
+		DataStructureArray* arr_struct = static_cast<DataStructureArray*>(p_type.structure);
+		pt = arr_struct->element_type.primitive_type;
+	}
+
+	switch (pt) {
 
 		case TYPE_VOID: return "void";
 		case TYPE_BOOL: return "bool";
@@ -817,7 +824,7 @@ bool ShaderLanguage::_find_identifier(const BlockNode *p_block, const Map<String
 
 	if (shader->varyings.has(p_identifier)) {
 		if (r_data_type) {
-			*r_data_type = shader->varyings[p_identifier].type;
+			*r_data_type = shader->varyings[p_identifier];
 		}
 		if (r_type) {
 			*r_type = IDENTIFIER_VARYING;
@@ -827,6 +834,7 @@ bool ShaderLanguage::_find_identifier(const BlockNode *p_block, const Map<String
 
 	if (shader->uniforms.has(p_identifier)) {
 		if (r_data_type) {
+			auto& t = shader->uniforms[p_identifier];
 			*r_data_type = shader->uniforms[p_identifier].type;
 		}
 		if (r_type) {
@@ -876,7 +884,7 @@ bool ShaderLanguage::_validate_operator(OperatorNode *p_op, DataType *r_ret_type
 			DataType na = p_op->arguments[0]->get_datatype();
 			DataType nb = p_op->arguments[1]->get_datatype();
 
-			valid = na == nb && (na == TYPE_UINT || na == TYPE_INT || na == TYPE_FLOAT);
+			valid = na == nb && (na.primitive_type == TYPE_UINT || na.primitive_type == TYPE_INT || na.primitive_type == TYPE_FLOAT);
 			ret_type = TYPE_BOOL;
 
 		} break;
@@ -885,14 +893,14 @@ bool ShaderLanguage::_validate_operator(OperatorNode *p_op, DataType *r_ret_type
 			DataType na = p_op->arguments[0]->get_datatype();
 			DataType nb = p_op->arguments[1]->get_datatype();
 
-			valid = na == nb && na == TYPE_BOOL;
+			valid = na == nb && na.primitive_type == TYPE_BOOL;
 			ret_type = TYPE_BOOL;
 
 		} break;
 		case OP_NOT: {
 
 			DataType na = p_op->arguments[0]->get_datatype();
-			valid = na == TYPE_BOOL;
+			valid = na.primitive_type == TYPE_BOOL;
 			ret_type = TYPE_BOOL;
 
 		} break;
@@ -902,7 +910,7 @@ bool ShaderLanguage::_validate_operator(OperatorNode *p_op, DataType *r_ret_type
 		case OP_POST_DECREMENT:
 		case OP_NEGATE: {
 			DataType na = p_op->arguments[0]->get_datatype();
-			valid = na > TYPE_BOOL && na < TYPE_MAT2;
+			valid = na.primitive_type > TYPE_BOOL && na.primitive_type < TYPE_MAT2;
 			ret_type = na;
 		} break;
 		case OP_ADD:
@@ -912,57 +920,57 @@ bool ShaderLanguage::_validate_operator(OperatorNode *p_op, DataType *r_ret_type
 			DataType na = p_op->arguments[0]->get_datatype();
 			DataType nb = p_op->arguments[1]->get_datatype();
 
-			if (na > nb) {
+			if (na.primitive_type > nb.primitive_type) {
 				//make things easier;
 				SWAP(na, nb);
 			}
 
 			if (na == nb) {
-				valid = (na > TYPE_BOOL && na <= TYPE_MAT4);
+				valid = (na.primitive_type > TYPE_BOOL && na.primitive_type <= TYPE_MAT4);
 				ret_type = na;
-			} else if (na == TYPE_INT && nb == TYPE_IVEC2) {
+			} else if (na.primitive_type == TYPE_INT && nb.primitive_type == TYPE_IVEC2) {
 				valid = true;
 				ret_type = TYPE_IVEC2;
-			} else if (na == TYPE_INT && nb == TYPE_IVEC3) {
+			} else if (na.primitive_type == TYPE_INT && nb.primitive_type == TYPE_IVEC3) {
 				valid = true;
 				ret_type = TYPE_IVEC3;
-			} else if (na == TYPE_INT && nb == TYPE_IVEC4) {
+			} else if (na.primitive_type == TYPE_INT && nb.primitive_type == TYPE_IVEC4) {
 				valid = true;
 				ret_type = TYPE_IVEC4;
-			} else if (na == TYPE_UINT && nb == TYPE_UVEC2) {
+			} else if (na.primitive_type == TYPE_UINT && nb.primitive_type == TYPE_UVEC2) {
 				valid = true;
 				ret_type = TYPE_UVEC2;
-			} else if (na == TYPE_UINT && nb == TYPE_UVEC3) {
+			} else if (na.primitive_type == TYPE_UINT && nb.primitive_type == TYPE_UVEC3) {
 				valid = true;
 				ret_type = TYPE_UVEC3;
-			} else if (na == TYPE_UINT && nb == TYPE_UVEC4) {
+			} else if (na.primitive_type == TYPE_UINT && nb.primitive_type == TYPE_UVEC4) {
 				valid = true;
 				ret_type = TYPE_UVEC4;
-			} else if (na == TYPE_FLOAT && nb == TYPE_VEC2) {
+			} else if (na.primitive_type == TYPE_FLOAT && nb.primitive_type == TYPE_VEC2) {
 				valid = true;
 				ret_type = TYPE_VEC2;
-			} else if (na == TYPE_FLOAT && nb == TYPE_VEC3) {
+			} else if (na.primitive_type == TYPE_FLOAT && nb.primitive_type == TYPE_VEC3) {
 				valid = true;
 				ret_type = TYPE_VEC3;
-			} else if (na == TYPE_FLOAT && nb == TYPE_VEC4) {
+			} else if (na.primitive_type == TYPE_FLOAT && nb.primitive_type == TYPE_VEC4) {
 				valid = true;
 				ret_type = TYPE_VEC4;
-			} else if (p_op->op == OP_MUL && na == TYPE_FLOAT && nb == TYPE_MAT2) {
+			} else if (p_op->op == OP_MUL && na.primitive_type == TYPE_FLOAT && nb.primitive_type == TYPE_MAT2) {
 				valid = true;
 				ret_type = TYPE_MAT2;
-			} else if (p_op->op == OP_MUL && na == TYPE_FLOAT && nb == TYPE_MAT3) {
+			} else if (p_op->op == OP_MUL && na.primitive_type == TYPE_FLOAT && nb.primitive_type == TYPE_MAT3) {
 				valid = true;
 				ret_type = TYPE_MAT3;
-			} else if (p_op->op == OP_MUL && na == TYPE_FLOAT && nb == TYPE_MAT4) {
+			} else if (p_op->op == OP_MUL && na.primitive_type == TYPE_FLOAT && nb.primitive_type == TYPE_MAT4) {
 				valid = true;
 				ret_type = TYPE_MAT4;
-			} else if (p_op->op == OP_MUL && na == TYPE_VEC2 && nb == TYPE_MAT2) {
+			} else if (p_op->op == OP_MUL && na.primitive_type == TYPE_VEC2 && nb.primitive_type == TYPE_MAT2) {
 				valid = true;
 				ret_type = TYPE_VEC2;
-			} else if (p_op->op == OP_MUL && na == TYPE_VEC3 && nb == TYPE_MAT3) {
+			} else if (p_op->op == OP_MUL && na.primitive_type == TYPE_VEC3 && nb.primitive_type == TYPE_MAT3) {
 				valid = true;
 				ret_type = TYPE_VEC3;
-			} else if (p_op->op == OP_MUL && na == TYPE_VEC4 && nb == TYPE_MAT4) {
+			} else if (p_op->op == OP_MUL && na.primitive_type == TYPE_VEC4 && nb.primitive_type == TYPE_MAT4) {
 				valid = true;
 				ret_type = TYPE_VEC4;
 			}
@@ -980,47 +988,47 @@ bool ShaderLanguage::_validate_operator(OperatorNode *p_op, DataType *r_ret_type
 			DataType na = p_op->arguments[0]->get_datatype();
 			DataType nb = p_op->arguments[1]->get_datatype();
 
-			if (na == TYPE_INT && nb == TYPE_INT) {
+			if (na.primitive_type == TYPE_INT && nb.primitive_type == TYPE_INT) {
 				valid = true;
 				ret_type = TYPE_INT;
-			} else if (na == TYPE_IVEC2 && nb == TYPE_INT) {
+			} else if (na.primitive_type == TYPE_IVEC2 && nb.primitive_type == TYPE_INT) {
 				valid = true;
 				ret_type = TYPE_IVEC2;
-			} else if (na == TYPE_IVEC3 && nb == TYPE_INT) {
+			} else if (na.primitive_type == TYPE_IVEC3 && nb.primitive_type == TYPE_INT) {
 				valid = true;
 				ret_type = TYPE_IVEC3;
-			} else if (na == TYPE_IVEC4 && nb == TYPE_INT) {
+			} else if (na.primitive_type == TYPE_IVEC4 && nb.primitive_type == TYPE_INT) {
 				valid = true;
 				ret_type = TYPE_IVEC4;
-			} else if (na == TYPE_IVEC2 && nb == TYPE_IVEC2) {
+			} else if (na.primitive_type == TYPE_IVEC2 && nb.primitive_type == TYPE_IVEC2) {
 				valid = true;
 				ret_type = TYPE_IVEC2;
-			} else if (na == TYPE_IVEC3 && nb == TYPE_IVEC3) {
+			} else if (na.primitive_type == TYPE_IVEC3 && nb.primitive_type == TYPE_IVEC3) {
 				valid = true;
 				ret_type = TYPE_IVEC3;
-			} else if (na == TYPE_IVEC4 && nb == TYPE_IVEC4) {
+			} else if (na.primitive_type == TYPE_IVEC4 && nb.primitive_type == TYPE_IVEC4) {
 				valid = true;
 				ret_type = TYPE_IVEC4;
 				/////
-			} else if (na == TYPE_UINT && nb == TYPE_UINT) {
+			} else if (na.primitive_type == TYPE_UINT && nb.primitive_type == TYPE_UINT) {
 				valid = true;
 				ret_type = TYPE_UINT;
-			} else if (na == TYPE_UVEC2 && nb == TYPE_UINT) {
+			} else if (na.primitive_type == TYPE_UVEC2 && nb.primitive_type == TYPE_UINT) {
 				valid = true;
 				ret_type = TYPE_UVEC2;
-			} else if (na == TYPE_UVEC3 && nb == TYPE_UINT) {
+			} else if (na.primitive_type == TYPE_UVEC3 && nb.primitive_type == TYPE_UINT) {
 				valid = true;
 				ret_type = TYPE_UVEC3;
-			} else if (na == TYPE_UVEC4 && nb == TYPE_UINT) {
+			} else if (na.primitive_type == TYPE_UVEC4 && nb.primitive_type == TYPE_UINT) {
 				valid = true;
 				ret_type = TYPE_UVEC4;
-			} else if (na == TYPE_UVEC2 && nb == TYPE_UVEC2) {
+			} else if (na.primitive_type == TYPE_UVEC2 && nb.primitive_type == TYPE_UVEC2) {
 				valid = true;
 				ret_type = TYPE_UVEC2;
-			} else if (na == TYPE_UVEC3 && nb == TYPE_UVEC3) {
+			} else if (na.primitive_type == TYPE_UVEC3 && nb.primitive_type == TYPE_UVEC3) {
 				valid = true;
 				ret_type = TYPE_UVEC3;
-			} else if (na == TYPE_UVEC4 && nb == TYPE_UVEC4) {
+			} else if (na.primitive_type == TYPE_UVEC4 && nb.primitive_type == TYPE_UVEC4) {
 				valid = true;
 				ret_type = TYPE_UVEC4;
 			}
@@ -1033,46 +1041,46 @@ bool ShaderLanguage::_validate_operator(OperatorNode *p_op, DataType *r_ret_type
 			DataType na = p_op->arguments[0]->get_datatype();
 			DataType nb = p_op->arguments[1]->get_datatype();
 
-			if (na == TYPE_INT && nb == TYPE_INT) {
+			if (na.primitive_type == TYPE_INT && nb.primitive_type == TYPE_INT) {
 				valid = true;
 				ret_type = TYPE_INT;
-			} else if (na == TYPE_IVEC2 && nb == TYPE_INT) {
+			} else if (na.primitive_type == TYPE_IVEC2 && nb.primitive_type == TYPE_INT) {
 				valid = true;
 				ret_type = TYPE_IVEC2;
-			} else if (na == TYPE_IVEC3 && nb == TYPE_INT) {
+			} else if (na.primitive_type == TYPE_IVEC3 && nb.primitive_type == TYPE_INT) {
 				valid = true;
 				ret_type = TYPE_IVEC3;
-			} else if (na == TYPE_IVEC4 && nb == TYPE_INT) {
+			} else if (na.primitive_type == TYPE_IVEC4 && nb.primitive_type == TYPE_INT) {
 				valid = true;
 				ret_type = TYPE_IVEC4;
-			} else if (na == TYPE_IVEC2 && nb == TYPE_IVEC2) {
+			} else if (na.primitive_type == TYPE_IVEC2 && nb.primitive_type == TYPE_IVEC2) {
 				valid = true;
 				ret_type = TYPE_IVEC2;
-			} else if (na == TYPE_IVEC3 && nb == TYPE_IVEC3) {
+			} else if (na.primitive_type == TYPE_IVEC3 && nb.primitive_type == TYPE_IVEC3) {
 				valid = true;
 				ret_type = TYPE_IVEC3;
-			} else if (na == TYPE_IVEC4 && nb == TYPE_IVEC4) {
+			} else if (na.primitive_type == TYPE_IVEC4 && nb.primitive_type == TYPE_IVEC4) {
 				valid = true;
 				ret_type = TYPE_IVEC4;
-			} else if (na == TYPE_UINT && nb == TYPE_UINT) {
+			} else if (na.primitive_type == TYPE_UINT && nb.primitive_type == TYPE_UINT) {
 				valid = true;
 				ret_type = TYPE_UINT;
-			} else if (na == TYPE_UVEC2 && nb == TYPE_UINT) {
+			} else if (na.primitive_type == TYPE_UVEC2 && nb.primitive_type == TYPE_UINT) {
 				valid = true;
 				ret_type = TYPE_UVEC2;
-			} else if (na == TYPE_UVEC3 && nb == TYPE_UINT) {
+			} else if (na.primitive_type == TYPE_UVEC3 && nb.primitive_type == TYPE_UINT) {
 				valid = true;
 				ret_type = TYPE_UVEC3;
-			} else if (na == TYPE_UVEC4 && nb == TYPE_UINT) {
+			} else if (na.primitive_type == TYPE_UVEC4 && nb.primitive_type == TYPE_UINT) {
 				valid = true;
 				ret_type = TYPE_UVEC4;
-			} else if (na == TYPE_UVEC2 && nb == TYPE_UVEC2) {
+			} else if (na.primitive_type == TYPE_UVEC2 && nb.primitive_type == TYPE_UVEC2) {
 				valid = true;
 				ret_type = TYPE_UVEC2;
-			} else if (na == TYPE_UVEC3 && nb == TYPE_UVEC3) {
+			} else if (na.primitive_type == TYPE_UVEC3 && nb.primitive_type == TYPE_UVEC3) {
 				valid = true;
 				ret_type = TYPE_UVEC3;
-			} else if (na == TYPE_UVEC4 && nb == TYPE_UVEC4) {
+			} else if (na.primitive_type == TYPE_UVEC4 && nb.primitive_type == TYPE_UVEC4) {
 				valid = true;
 				ret_type = TYPE_UVEC4;
 			}
@@ -1092,42 +1100,42 @@ bool ShaderLanguage::_validate_operator(OperatorNode *p_op, DataType *r_ret_type
 			DataType nb = p_op->arguments[1]->get_datatype();
 
 			if (na == nb) {
-				valid = (na > TYPE_BOOL && na < TYPE_MAT2) || (p_op->op == OP_ASSIGN_MUL && na >= TYPE_MAT2 && na <= TYPE_MAT4);
+				valid = (na.primitive_type > TYPE_BOOL && na.primitive_type < TYPE_MAT2) || (p_op->op == OP_ASSIGN_MUL && na.primitive_type >= TYPE_MAT2 && na.primitive_type <= TYPE_MAT4);
 				ret_type = na;
-			} else if (na == TYPE_IVEC2 && nb == TYPE_INT) {
+			} else if (na.primitive_type == TYPE_IVEC2 && nb.primitive_type == TYPE_INT) {
 				valid = true;
 				ret_type = TYPE_IVEC2;
-			} else if (na == TYPE_IVEC3 && nb == TYPE_INT) {
+			} else if (na.primitive_type == TYPE_IVEC3 && nb.primitive_type == TYPE_INT) {
 				valid = true;
 				ret_type = TYPE_IVEC3;
-			} else if (na == TYPE_IVEC4 && nb == TYPE_INT) {
+			} else if (na.primitive_type == TYPE_IVEC4 && nb.primitive_type == TYPE_INT) {
 				valid = true;
 				ret_type = TYPE_IVEC4;
-			} else if (na == TYPE_UVEC2 && nb == TYPE_UINT) {
+			} else if (na.primitive_type == TYPE_UVEC2 && nb.primitive_type == TYPE_UINT) {
 				valid = true;
 				ret_type = TYPE_UVEC2;
-			} else if (na == TYPE_UVEC3 && nb == TYPE_UINT) {
+			} else if (na.primitive_type == TYPE_UVEC3 && nb.primitive_type == TYPE_UINT) {
 				valid = true;
 				ret_type = TYPE_UVEC3;
-			} else if (na == TYPE_UVEC4 && nb == TYPE_UINT) {
+			} else if (na.primitive_type == TYPE_UVEC4 && nb.primitive_type == TYPE_UINT) {
 				valid = true;
 				ret_type = TYPE_UVEC4;
-			} else if (na == TYPE_VEC2 && nb == TYPE_FLOAT) {
+			} else if (na.primitive_type == TYPE_VEC2 && nb.primitive_type == TYPE_FLOAT) {
 				valid = true;
 				ret_type = TYPE_VEC2;
-			} else if (na == TYPE_VEC3 && nb == TYPE_FLOAT) {
+			} else if (na.primitive_type == TYPE_VEC3 && nb.primitive_type == TYPE_FLOAT) {
 				valid = true;
 				ret_type = TYPE_VEC3;
-			} else if (na == TYPE_VEC4 && nb == TYPE_FLOAT) {
+			} else if (na.primitive_type == TYPE_VEC4 && nb.primitive_type == TYPE_FLOAT) {
 				valid = true;
 				ret_type = TYPE_VEC4;
-			} else if (p_op->op == OP_ASSIGN_MUL && na == TYPE_MAT2 && nb == TYPE_VEC2) {
+			} else if (p_op->op == OP_ASSIGN_MUL && na.primitive_type == TYPE_MAT2 && nb.primitive_type == TYPE_VEC2) {
 				valid = true;
 				ret_type = TYPE_MAT2;
-			} else if (p_op->op == OP_ASSIGN_MUL && na == TYPE_MAT3 && nb == TYPE_VEC3) {
+			} else if (p_op->op == OP_ASSIGN_MUL && na.primitive_type == TYPE_MAT3 && nb.primitive_type == TYPE_VEC3) {
 				valid = true;
 				ret_type = TYPE_MAT3;
-			} else if (p_op->op == OP_ASSIGN_MUL && na == TYPE_MAT4 && nb == TYPE_VEC4) {
+			} else if (p_op->op == OP_ASSIGN_MUL && na.primitive_type == TYPE_MAT4 && nb.primitive_type == TYPE_VEC4) {
 				valid = true;
 				ret_type = TYPE_MAT4;
 			}
@@ -1150,59 +1158,59 @@ bool ShaderLanguage::_validate_operator(OperatorNode *p_op, DataType *r_ret_type
 			DataType na = p_op->arguments[0]->get_datatype();
 			DataType nb = p_op->arguments[1]->get_datatype();
 
-			if (na > nb && p_op->op >= OP_BIT_AND) {
+			if (na.primitive_type > nb.primitive_type && p_op->op >= OP_BIT_AND) {
 				//can swap for non assign
 				SWAP(na, nb);
 			}
 
-			if (na == TYPE_INT && nb == TYPE_INT) {
+			if (na.primitive_type == TYPE_INT && nb.primitive_type == TYPE_INT) {
 				valid = true;
 				ret_type = TYPE_INT;
-			} else if (na == TYPE_IVEC2 && nb == TYPE_INT) {
+			} else if (na.primitive_type == TYPE_IVEC2 && nb.primitive_type == TYPE_INT) {
 				valid = true;
 				ret_type = TYPE_IVEC2;
-			} else if (na == TYPE_IVEC3 && nb == TYPE_INT) {
+			} else if (na.primitive_type == TYPE_IVEC3 && nb.primitive_type == TYPE_INT) {
 				valid = true;
 				ret_type = TYPE_IVEC3;
-			} else if (na == TYPE_IVEC4 && nb == TYPE_INT) {
+			} else if (na.primitive_type == TYPE_IVEC4 && nb.primitive_type == TYPE_INT) {
 				valid = true;
 				ret_type = TYPE_IVEC4;
-			} else if (na == TYPE_IVEC2 && nb == TYPE_IVEC2) {
+			} else if (na.primitive_type == TYPE_IVEC2 && nb.primitive_type == TYPE_IVEC2) {
 				valid = true;
 				ret_type = TYPE_IVEC2;
-			} else if (na == TYPE_IVEC3 && nb == TYPE_IVEC3) {
+			} else if (na.primitive_type == TYPE_IVEC3 && nb.primitive_type == TYPE_IVEC3) {
 				valid = true;
 				ret_type = TYPE_IVEC3;
-			} else if (na == TYPE_IVEC4 && nb == TYPE_IVEC4) {
+			} else if (na.primitive_type == TYPE_IVEC4 && nb.primitive_type == TYPE_IVEC4) {
 				valid = true;
 				ret_type = TYPE_IVEC4;
 				/////
-			} else if (na == TYPE_UINT && nb == TYPE_UINT) {
+			} else if (na.primitive_type == TYPE_UINT && nb.primitive_type == TYPE_UINT) {
 				valid = true;
 				ret_type = TYPE_UINT;
-			} else if (na == TYPE_UVEC2 && nb == TYPE_UINT) {
+			} else if (na.primitive_type == TYPE_UVEC2 && nb.primitive_type == TYPE_UINT) {
 				valid = true;
 				ret_type = TYPE_UVEC2;
-			} else if (na == TYPE_UVEC3 && nb == TYPE_UINT) {
+			} else if (na.primitive_type == TYPE_UVEC3 && nb.primitive_type == TYPE_UINT) {
 				valid = true;
 				ret_type = TYPE_UVEC3;
-			} else if (na == TYPE_UVEC4 && nb == TYPE_UINT) {
+			} else if (na.primitive_type == TYPE_UVEC4 && nb.primitive_type == TYPE_UINT) {
 				valid = true;
 				ret_type = TYPE_UVEC4;
-			} else if (na == TYPE_UVEC2 && nb == TYPE_UVEC2) {
+			} else if (na.primitive_type == TYPE_UVEC2 && nb.primitive_type == TYPE_UVEC2) {
 				valid = true;
 				ret_type = TYPE_UVEC2;
-			} else if (na == TYPE_UVEC3 && nb == TYPE_UVEC3) {
+			} else if (na.primitive_type == TYPE_UVEC3 && nb.primitive_type == TYPE_UVEC3) {
 				valid = true;
 				ret_type = TYPE_UVEC3;
-			} else if (na == TYPE_UVEC4 && nb == TYPE_UVEC4) {
+			} else if (na.primitive_type == TYPE_UVEC4 && nb.primitive_type == TYPE_UVEC4) {
 				valid = true;
 				ret_type = TYPE_UVEC4;
 			}
 		} break;
 		case OP_BIT_INVERT: { //unaries
 			DataType na = p_op->arguments[0]->get_datatype();
-			valid = na >= TYPE_INT && na < TYPE_FLOAT;
+			valid = na.primitive_type >= TYPE_INT && na.primitive_type < TYPE_FLOAT;
 			ret_type = na;
 		} break;
 		case OP_SELECT_IF: {
@@ -1210,7 +1218,7 @@ bool ShaderLanguage::_validate_operator(OperatorNode *p_op, DataType *r_ret_type
 			DataType nb = p_op->arguments[1]->get_datatype();
 			DataType nc = p_op->arguments[2]->get_datatype();
 
-			valid = na == TYPE_BOOL && (nb == nc);
+			valid = na.primitive_type == TYPE_BOOL && (nb == nc);
 			ret_type = nb;
 		} break;
 		default: {
@@ -1890,7 +1898,9 @@ bool ShaderLanguage::_validate_function_call(BlockNode *p_block, OperatorNode *p
 	for (int i = 1; i < p_func->arguments.size(); i++) {
 		if (p_func->arguments[i]->type != Node::TYPE_CONSTANT)
 			all_const = false;
-		args.push_back(p_func->arguments[i]->get_datatype());
+
+		DataType dt = p_func->arguments[i]->get_datatype();
+		args.push_back(dt);
 	}
 
 	int argcount = args.size();
@@ -1909,7 +1919,7 @@ bool ShaderLanguage::_validate_function_call(BlockNode *p_block, OperatorNode *p
 				bool fail = false;
 				for (int i = 0; i < argcount; i++) {
 
-					if (get_scalar_type(args[i]) == args[i] && p_func->arguments[i + 1]->type == Node::TYPE_CONSTANT && convert_constant(static_cast<ConstantNode *>(p_func->arguments[i + 1]), builtin_func_defs[idx].args[i])) {
+					if (get_scalar_type(args[i]) == args[i].primitive_type && p_func->arguments[i + 1]->type == Node::TYPE_CONSTANT && convert_constant(static_cast<ConstantNode *>(p_func->arguments[i + 1]), builtin_func_defs[idx].args[i])) {
 						//all good
 					} else if (args[i] != builtin_func_defs[idx].args[i]) {
 						fail = true;
@@ -1986,7 +1996,7 @@ bool ShaderLanguage::_validate_function_call(BlockNode *p_block, OperatorNode *p
 
 		for (int i = 0; i < args.size(); i++) {
 
-			if (get_scalar_type(args[i]) == args[i] && p_func->arguments[i + 1]->type == Node::TYPE_CONSTANT && convert_constant(static_cast<ConstantNode *>(p_func->arguments[i + 1]), pfunc->arguments[i].type)) {
+			if (get_scalar_type(args[i]) == args[i].primitive_type && p_func->arguments[i + 1]->type == Node::TYPE_CONSTANT && convert_constant(static_cast<ConstantNode *>(p_func->arguments[i + 1]), pfunc->arguments[i].type)) {
 				//all good
 			} else if (args[i] != pfunc->arguments[i].type) {
 				fail = true;
@@ -2135,14 +2145,14 @@ bool ShaderLanguage::convert_constant(ConstantNode *p_constant, DataType p_to_ty
 		return false;
 }
 
-bool ShaderLanguage::is_scalar_type(DataType p_type) {
+bool ShaderLanguage::is_scalar_type(const DataType& p_type) {
 
-	return p_type == TYPE_BOOL || p_type == TYPE_INT || p_type == TYPE_UINT || p_type == TYPE_FLOAT;
+	return p_type.primitive_type == TYPE_BOOL || p_type.primitive_type == TYPE_INT || p_type.primitive_type == TYPE_UINT || p_type.primitive_type == TYPE_FLOAT;
 }
 
-bool ShaderLanguage::is_sampler_type(DataType p_type) {
+bool ShaderLanguage::is_sampler_type(const DataType& p_type) {
 
-	return p_type == TYPE_SAMPLER2D || p_type == TYPE_ISAMPLER2D || p_type == TYPE_USAMPLER2D || p_type == TYPE_SAMPLERCUBE;
+	return p_type.primitive_type == TYPE_SAMPLER2D || p_type.primitive_type == TYPE_ISAMPLER2D || p_type.primitive_type == TYPE_USAMPLER2D || p_type.primitive_type == TYPE_SAMPLERCUBE;
 }
 
 void ShaderLanguage::get_keyword_list(List<String> *r_keywords) {
@@ -2189,9 +2199,9 @@ void ShaderLanguage::get_builtin_funcs(List<String> *r_keywords) {
 	}
 }
 
-ShaderLanguage::DataType ShaderLanguage::get_scalar_type(DataType p_type) {
+ShaderLanguage::PrimitiveType ShaderLanguage::get_scalar_type(const DataType& p_type) {
 
-	static const DataType scalar_types[] = {
+	static const PrimitiveType scalar_types[] = {
 		TYPE_VOID,
 		TYPE_BOOL,
 		TYPE_BOOL,
@@ -2218,10 +2228,10 @@ ShaderLanguage::DataType ShaderLanguage::get_scalar_type(DataType p_type) {
 		TYPE_FLOAT,
 	};
 
-	return scalar_types[p_type];
+	return scalar_types[p_type.primitive_type];
 }
 
-int ShaderLanguage::get_cardinality(DataType p_type) {
+int ShaderLanguage::get_cardinality(const DataType& p_type) {
 	static const int cardinality_table[] = {
 		0,
 		1,
@@ -2249,7 +2259,7 @@ int ShaderLanguage::get_cardinality(DataType p_type) {
 		1,
 	};
 
-	return cardinality_table[p_type];
+	return cardinality_table[p_type.primitive_type];
 }
 
 bool ShaderLanguage::_get_completable_identifier(BlockNode *p_block, CompletionType p_type, StringName &identifier) {
@@ -2438,7 +2448,7 @@ ShaderLanguage::Node *ShaderLanguage::_parse_expression(BlockNode *p_block, cons
 
 			if (is_token_precision(tk.type)) {
 
-				func->return_precision_cache = get_token_precision(tk.type);
+				func->return_cache.precision = get_token_precision(tk.type);
 				tk = _get_token();
 			}
 
@@ -2610,7 +2620,7 @@ ShaderLanguage::Node *ShaderLanguage::_parse_expression(BlockNode *p_block, cons
 
 				bool ok = true;
 				DataType member_type;
-				switch (dt) {
+				switch (dt.primitive_type) {
 					case TYPE_BVEC2:
 					case TYPE_IVEC2:
 					case TYPE_UVEC2:
@@ -2618,7 +2628,7 @@ ShaderLanguage::Node *ShaderLanguage::_parse_expression(BlockNode *p_block, cons
 
 						int l = ident.length();
 						if (l == 1) {
-							member_type = DataType(dt - 1);
+							member_type.primitive_type = PrimitiveType(dt.primitive_type - 1);
 						} else if (l == 2) {
 							member_type = dt;
 						} else {
@@ -2649,9 +2659,9 @@ ShaderLanguage::Node *ShaderLanguage::_parse_expression(BlockNode *p_block, cons
 
 						int l = ident.length();
 						if (l == 1) {
-							member_type = DataType(dt - 2);
+							member_type.primitive_type = PrimitiveType(dt.primitive_type - 2);
 						} else if (l == 2) {
-							member_type = DataType(dt - 1);
+							member_type.primitive_type = PrimitiveType(dt.primitive_type - 1);
 						} else if (l == 3) {
 							member_type = dt;
 						} else {
@@ -2684,11 +2694,11 @@ ShaderLanguage::Node *ShaderLanguage::_parse_expression(BlockNode *p_block, cons
 
 						int l = ident.length();
 						if (l == 1) {
-							member_type = DataType(dt - 3);
+							member_type.primitive_type = PrimitiveType(dt.primitive_type - 3);
 						} else if (l == 2) {
-							member_type = DataType(dt - 2);
+							member_type.primitive_type = PrimitiveType(dt.primitive_type - 2);
 						} else if (l == 3) {
-							member_type = DataType(dt - 1);
+							member_type.primitive_type = PrimitiveType(dt.primitive_type - 1);
 						} else if (l == 4) {
 							member_type = dt;
 						} else {
@@ -2758,87 +2768,92 @@ ShaderLanguage::Node *ShaderLanguage::_parse_expression(BlockNode *p_block, cons
 
 				DataType member_type = TYPE_VOID;
 				VariableNode* var_expr = dynamic_cast<VariableNode *>(expr);
-				if(var_expr && var_expr->is_array()) {
-					member_type = expr->get_datatype();
-				} else {
-					switch (expr->get_datatype()) {
-						case TYPE_BVEC2:
-						case TYPE_VEC2:
-						case TYPE_IVEC2:
-						case TYPE_UVEC2:
-						case TYPE_MAT2:
-							if (index->type == Node::TYPE_CONSTANT) {
-								uint32_t index_constant = static_cast<ConstantNode *>(index)->values[0].uint;
-								if (index_constant >= 2) {
-									_set_error("Index out of range (0-1)");
-									return NULL;
-								}
-							} else {
-								_set_error("Only integer constants are allowed as index at the moment");
+				DataStructureArray* arr_struct = NULL;
+
+				switch (expr->get_datatype().primitive_type) {
+					case TYPE_BVEC2:
+					case TYPE_VEC2:
+					case TYPE_IVEC2:
+					case TYPE_UVEC2:
+					case TYPE_MAT2:
+						if (index->type == Node::TYPE_CONSTANT) {
+							uint32_t index_constant = static_cast<ConstantNode *>(index)->values[0].uint;
+							if (index_constant >= 2) {
+								_set_error("Index out of range (0-1)");
 								return NULL;
 							}
-
-							switch (expr->get_datatype()) {
-								case TYPE_BVEC2: member_type = TYPE_BOOL; break;
-								case TYPE_VEC2: member_type = TYPE_FLOAT; break;
-								case TYPE_IVEC2: member_type = TYPE_INT; break;
-								case TYPE_UVEC2: member_type = TYPE_UINT; break;
-								case TYPE_MAT2: member_type = TYPE_VEC2; break;
-							}
-
-							break;
-						case TYPE_BVEC3:
-						case TYPE_VEC3:
-						case TYPE_IVEC3:
-						case TYPE_UVEC3:
-						case TYPE_MAT3:
-							if (index->type == Node::TYPE_CONSTANT) { //[AS] TODO:
-								uint32_t index_constant = static_cast<ConstantNode *>(index)->values[0].uint;
-								if (index_constant >= 3) {
-									_set_error("Index out of range (0-2)");
-									return NULL;
-								}
-							} else {
-								_set_error("Only integer constants are allowed as index at the moment");
-								return NULL;
-							}
-
-							switch (expr->get_datatype()) {
-								case TYPE_BVEC3: member_type = TYPE_BOOL; break;
-								case TYPE_VEC3: member_type = TYPE_FLOAT; break;
-								case TYPE_IVEC3: member_type = TYPE_INT; break;
-								case TYPE_UVEC3: member_type = TYPE_UINT; break;
-								case TYPE_MAT3: member_type = TYPE_VEC3; break;
-							}
-							break;
-						case TYPE_BVEC4:
-						case TYPE_VEC4:
-						case TYPE_IVEC4:
-						case TYPE_UVEC4:
-						case TYPE_MAT4:
-							if (index->type == Node::TYPE_CONSTANT) {
-								uint32_t index_constant = static_cast<ConstantNode *>(index)->values[0].uint;
-								if (index_constant >= 4) {
-									_set_error("Index out of range (0-3)");
-									return NULL;
-								}
-							} else {
-								_set_error("Only integer constants are allowed as index at the moment");
-								return NULL;
-							}
-
-							switch (expr->get_datatype()) {
-								case TYPE_BVEC4: member_type = TYPE_BOOL; break;
-								case TYPE_VEC4: member_type = TYPE_FLOAT; break;
-								case TYPE_IVEC4: member_type = TYPE_INT; break;
-								case TYPE_UVEC4: member_type = TYPE_UINT; break;
-								case TYPE_MAT4: member_type = TYPE_VEC4; break;
-							}
-							break;
-						default: {
-							_set_error("Object of type '" + get_datatype_name(expr->get_datatype()) + "' can't be indexed");
+						} else {
+							_set_error("Only integer constants are allowed as index at the moment");
 							return NULL;
 						}
+
+						switch (expr->get_datatype().primitive_type) {
+							case TYPE_BVEC2: member_type = TYPE_BOOL; break;
+							case TYPE_VEC2: member_type = TYPE_FLOAT; break;
+							case TYPE_IVEC2: member_type = TYPE_INT; break;
+							case TYPE_UVEC2: member_type = TYPE_UINT; break;
+							case TYPE_MAT2: member_type = TYPE_VEC2; break;
+						}
+
+						break;
+					case TYPE_BVEC3:
+					case TYPE_VEC3:
+					case TYPE_IVEC3:
+					case TYPE_UVEC3:
+					case TYPE_MAT3:
+						if (index->type == Node::TYPE_CONSTANT) { //[AS] TODO:
+							uint32_t index_constant = static_cast<ConstantNode *>(index)->values[0].uint;
+							if (index_constant >= 3) {
+								_set_error("Index out of range (0-2)");
+								return NULL;
+							}
+						} else {
+							_set_error("Only integer constants are allowed as index at the moment");
+							return NULL;
+						}
+
+						switch (expr->get_datatype().primitive_type) {
+							case TYPE_BVEC3: member_type = TYPE_BOOL; break;
+							case TYPE_VEC3: member_type = TYPE_FLOAT; break;
+							case TYPE_IVEC3: member_type = TYPE_INT; break;
+							case TYPE_UVEC3: member_type = TYPE_UINT; break;
+							case TYPE_MAT3: member_type = TYPE_VEC3; break;
+						}
+						break;
+					case TYPE_BVEC4:
+					case TYPE_VEC4:
+					case TYPE_IVEC4:
+					case TYPE_UVEC4:
+					case TYPE_MAT4:
+						if (index->type == Node::TYPE_CONSTANT) {
+							uint32_t index_constant = static_cast<ConstantNode *>(index)->values[0].uint;
+							if (index_constant >= 4) {
+								_set_error("Index out of range (0-3)");
+								return NULL;
+							}
+						} else {
+							_set_error("Only integer constants are allowed as index at the moment");
+							return NULL;
+						}
+
+						switch (expr->get_datatype().primitive_type) {
+							case TYPE_BVEC4: member_type = TYPE_BOOL; break;
+							case TYPE_VEC4: member_type = TYPE_FLOAT; break;
+							case TYPE_IVEC4: member_type = TYPE_INT; break;
+							case TYPE_UVEC4: member_type = TYPE_UINT; break;
+							case TYPE_MAT4: member_type = TYPE_VEC4; break;
+						}
+						break;
+					case TYPE_ARRAY:
+						{
+							DataType tdt = expr->get_datatype();
+							arr_struct = static_cast<DataStructureArray*>(tdt.structure);
+							member_type = arr_struct->element_type.primitive_type;
+						}
+						break;
+					default: {
+						_set_error("Object of type '" + get_datatype_name(expr->get_datatype()) + "' can't be indexed");
+						return NULL;
 					}
 				}
 
@@ -3196,7 +3211,7 @@ ShaderLanguage::Node *ShaderLanguage::_reduce_expression(BlockNode *p_block, Sha
 			if (op->arguments[i]->type == Node::TYPE_CONSTANT) {
 				ConstantNode *cn = static_cast<ConstantNode *>(op->arguments[i]);
 
-				if (get_scalar_type(cn->datatype) == base) {
+				if (get_scalar_type(cn->datatype) == base.primitive_type) {
 
 					int cardinality = get_cardinality(op->arguments[i]->get_datatype());
 					if (cn->values.size() == cardinality) {
@@ -3210,7 +3225,7 @@ ShaderLanguage::Node *ShaderLanguage::_reduce_expression(BlockNode *p_block, Sha
 							values.push_back(cn->values[0]);
 						}
 					} // else: should be filtered by the parser as it's an invalid constructor
-				} else if (get_scalar_type(cn->datatype) == cn->datatype) {
+				} else if (get_scalar_type(cn->datatype) == cn->datatype.primitive_type) {
 
 					ConstantNode::Value v;
 					if (!convert_constant(cn, base, &v)) {
@@ -3244,7 +3259,7 @@ ShaderLanguage::Node *ShaderLanguage::_reduce_expression(BlockNode *p_block, Sha
 			for (int i = 0; i < cn->values.size(); i++) {
 
 				ConstantNode::Value nv;
-				switch (base) {
+				switch (base.primitive_type) {
 					case TYPE_BOOL: {
 						nv.boolean = !cn->values[i].boolean;
 					} break;
@@ -3314,7 +3329,7 @@ Error ShaderLanguage::_parse_block(BlockNode *p_block, const Map<StringName, Bui
 
 			VariableDeclarationNode *vardecl = alloc_node<VariableDeclarationNode>();
 			vardecl->datatype = type;
-			vardecl->precision = precision;
+			vardecl->datatype.precision = precision;
 
 			p_block->statements.push_back(vardecl);
 
@@ -3333,7 +3348,7 @@ Error ShaderLanguage::_parse_block(BlockNode *p_block, const Map<StringName, Bui
 
 				BlockNode::Variable var;
 				var.type = type;
-				var.precision = precision;
+				var.type.precision = precision;
 				var.line = tk_line;
 
 				VariableDeclarationNode::Declaration decl;
@@ -3753,7 +3768,7 @@ Error ShaderLanguage::_parse_shader(const Map<StringName, FunctionInfo> &p_funct
 					return ERR_PARSE_ERROR;
 				}
 
-				if (!uniform && (type < TYPE_FLOAT || type > TYPE_VEC4)) {
+				if (!uniform && (type.primitive_type < TYPE_FLOAT || type.primitive_type > TYPE_VEC4)) {
 					_set_error("Invalid type for varying, only float,vec2,vec3,vec4 allowed.");
 					return ERR_PARSE_ERROR;
 				}
@@ -3784,11 +3799,12 @@ Error ShaderLanguage::_parse_shader(const Map<StringName, FunctionInfo> &p_funct
 					}
 
 					uniform.type = type;
-					uniform.precission = precision;
+					uniform.type.precision = precision;
 
 					//todo parse default value
 
 					tk = _get_token();
+					DataType* dt = &uniform.type;
 
 					while (tk.type == TK_BRACKET_OPEN) {
 						//arrays
@@ -3799,13 +3815,27 @@ Error ShaderLanguage::_parse_shader(const Map<StringName, FunctionInfo> &p_funct
 							return ERR_PARSE_ERROR;
 						}
 
-						uniform.array_lengths.push_back((uint16_t)tk.constant);
+						uint16_t array_length = (uint16_t)tk.constant;
 
 						tk = _get_token();
 						if(tk.type != TK_BRACKET_CLOSE) {
 							_set_error("Expected ']' after array length");
 							return ERR_PARSE_ERROR;
 						}
+
+						if(dt->structure) {
+							_set_error("Uniform data structure should be NULL");
+							return ERR_PARSE_ERROR;
+						}
+
+						uniform.array_lengths.push_back(array_length);
+
+						DataStructureArray* dsa = memnew(DataStructureArray);
+						dsa->element_type = *dt;
+						dsa->length = array_length;
+						dt->structure = dsa;
+						dt->primitive_type = TYPE_ARRAY;
+						dt = &dsa->element_type;
 
 						tk = _get_token();
 					}
@@ -3916,7 +3946,7 @@ Error ShaderLanguage::_parse_shader(const Map<StringName, FunctionInfo> &p_funct
 							_set_error("Expected valid type hint after ':'.");
 						}
 
-						if (uniform.hint != ShaderNode::Uniform::HINT_RANGE && uniform.hint != ShaderNode::Uniform::HINT_NONE && uniform.hint != ShaderNode::Uniform::HINT_COLOR && type <= TYPE_MAT4) {
+						if (uniform.hint != ShaderNode::Uniform::HINT_RANGE && uniform.hint != ShaderNode::Uniform::HINT_NONE && uniform.hint != ShaderNode::Uniform::HINT_COLOR && type.primitive_type <= TYPE_MAT4) {
 							_set_error("This hint is only for sampler types");
 							return ERR_PARSE_ERROR;
 						}
@@ -3945,7 +3975,18 @@ Error ShaderLanguage::_parse_shader(const Map<StringName, FunctionInfo> &p_funct
 						tk = _get_token();
 					}
 
+
+					if(shader->uniforms.find("array_test")) {
+						ShaderNode::Uniform& tt = shader->uniforms["array_test"];
+						int a = 1;
+						a++;
+					}
 					shader->uniforms[name] = uniform;
+					if(shader->uniforms.find("array_test")) {
+						ShaderNode::Uniform& tt = shader->uniforms["array_test"];
+						int a = 1;
+						a++;
+					}
 
 					if (tk.type != TK_SEMICOLON) {
 						_set_error("Expected ';'");
@@ -3953,9 +3994,8 @@ Error ShaderLanguage::_parse_shader(const Map<StringName, FunctionInfo> &p_funct
 					}
 				} else {
 
-					ShaderNode::Varying varying;
-					varying.type = type;
-					varying.precission = precision;
+					DataType varying = type;
+					varying.precision = precision;
 					varying.interpolation = interpolation;
 					shader->varyings[name] = varying;
 
@@ -4022,7 +4062,7 @@ Error ShaderLanguage::_parse_shader(const Map<StringName, FunctionInfo> &p_funct
 
 				func_node->name = name;
 				func_node->return_type = type;
-				func_node->return_precision = precision;
+				func_node->return_type.precision = precision;
 
 				if (p_functions.has(name)) {
 					func_node->can_discard = p_functions[name].can_discard;
@@ -4053,10 +4093,9 @@ Error ShaderLanguage::_parse_shader(const Map<StringName, FunctionInfo> &p_funct
 
 					DataType ptype;
 					StringName pname;
-					DataPrecision pprecision = PRECISION_DEFAULT;
 
 					if (is_token_precision(tk.type)) {
-						pprecision = get_token_precision(tk.type);
+						ptype.precision = get_token_precision(tk.type);
 						tk = _get_token();
 					}
 
@@ -4067,7 +4106,7 @@ Error ShaderLanguage::_parse_shader(const Map<StringName, FunctionInfo> &p_funct
 
 					ptype = get_token_datatype(tk.type);
 
-					if (ptype == TYPE_VOID) {
+					if (ptype.primitive_type == TYPE_VOID) {
 						_set_error("void not allowed in argument");
 						return ERR_PARSE_ERROR;
 					}
@@ -4088,7 +4127,7 @@ Error ShaderLanguage::_parse_shader(const Map<StringName, FunctionInfo> &p_funct
 					FunctionNode::Argument arg;
 					arg.type = ptype;
 					arg.name = pname;
-					arg.precision = pprecision;
+					arg.type.precision = precision;
 					arg.qualifier = qualifier;
 
 					func_node->arguments.push_back(arg);
@@ -4312,7 +4351,7 @@ Error ShaderLanguage::complete(const String &p_code, const Map<StringName, Funct
 			}
 
 			if (comp_ident) {
-				for (const Map<StringName, ShaderNode::Varying>::Element *E = shader->varyings.front(); E; E = E->next()) {
+				for (const Map<StringName, DataType>::Element *E = shader->varyings.front(); E; E = E->next()) {
 					matches.insert(E->key());
 				}
 				for (const Map<StringName, ShaderNode::Uniform>::Element *E = shader->uniforms.front(); E; E = E->next()) {
@@ -4443,7 +4482,7 @@ Error ShaderLanguage::complete(const String &p_code, const Map<StringName, Funct
 
 			int limit = 0;
 
-			switch (completion_base) {
+			switch (completion_base.primitive_type) {
 				case TYPE_BVEC2:
 				case TYPE_IVEC2:
 				case TYPE_UVEC2:

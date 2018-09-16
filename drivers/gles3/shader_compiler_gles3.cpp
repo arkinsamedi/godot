@@ -44,15 +44,22 @@ static String _mktab(int p_level) {
 	return tb;
 }
 
-static String _typestr(SL::DataType p_type) {
+static String _typestr(const SL::DataType& p_type) {
 
 	return ShaderLanguage::get_datatype_name(p_type);
 }
 
-static int _get_datatype_size(SL::DataType p_type, Vector<uint32_t>& array_lengths) {
+static int _get_datatype_size(SL::DataType& p_type, Vector<uint32_t>& array_lengths) {
 
 	int datatype_size = 0;
-	switch (p_type) {
+	SL::PrimitiveType pt = p_type.primitive_type;
+
+	if(pt == SL::TYPE_ARRAY) {
+		SL::DataStructureArray* arr_struct = static_cast<SL::DataStructureArray*>(p_type.structure);
+		pt = arr_struct->element_type.primitive_type;
+	}
+
+	switch (pt) {
 		case SL::TYPE_VOID: datatype_size = 0; break;
 		case SL::TYPE_BOOL: datatype_size = 4; break;
 		case SL::TYPE_BVEC2: datatype_size = 8; break;
@@ -97,10 +104,17 @@ static int _get_datatype_size(SL::DataType p_type, Vector<uint32_t>& array_lengt
 
 }
 
-static int _get_datatype_alignment(SL::DataType p_type, Vector<uint32_t>& array_lengths) {
+static int _get_datatype_alignment(SL::DataType& p_type, Vector<uint32_t>& array_lengths) {
 
-	switch (p_type) {
 
+	SL::PrimitiveType pt = p_type.primitive_type;
+
+	if(pt == SL::TYPE_ARRAY) {
+		SL::DataStructureArray* arr_struct = static_cast<SL::DataStructureArray*>(p_type.structure);
+		pt = arr_struct->element_type.primitive_type;
+	}
+
+	switch (pt) {
 		case SL::TYPE_VOID: return 0;
 		case SL::TYPE_BOOL: return (array_lengths.size()) ? 16 : 4;
 		case SL::TYPE_BVEC2: return (array_lengths.size()) ? 16 : 8;
@@ -178,15 +192,15 @@ static String f2sp0(float p_float) {
 		return rtoss(p_float);
 }
 
-static String get_constant_text(SL::DataType p_type, const Vector<SL::ConstantNode::Value> &p_values) {
+static String get_constant_text(SL::DataType& p_type, const Vector<SL::ConstantNode::Value> &p_values) {
 
-	switch (p_type) {
+	switch (p_type.primitive_type) {
 		case SL::TYPE_BOOL: return p_values[0].boolean ? "true" : "false";
 		case SL::TYPE_BVEC2:
 		case SL::TYPE_BVEC3:
 		case SL::TYPE_BVEC4: {
 
-			String text = "bvec" + itos(p_type - SL::TYPE_BOOL + 1) + "(";
+			String text = "bvec" + itos(p_type.primitive_type - SL::TYPE_BOOL + 1) + "(";
 			for (int i = 0; i < p_values.size(); i++) {
 				if (i > 0)
 					text += ",";
@@ -202,7 +216,7 @@ static String get_constant_text(SL::DataType p_type, const Vector<SL::ConstantNo
 		case SL::TYPE_IVEC3:
 		case SL::TYPE_IVEC4: {
 
-			String text = "ivec" + itos(p_type - SL::TYPE_INT + 1) + "(";
+			String text = "ivec" + itos(p_type.primitive_type - SL::TYPE_INT + 1) + "(";
 			for (int i = 0; i < p_values.size(); i++) {
 				if (i > 0)
 					text += ",";
@@ -218,7 +232,7 @@ static String get_constant_text(SL::DataType p_type, const Vector<SL::ConstantNo
 		case SL::TYPE_UVEC3:
 		case SL::TYPE_UVEC4: {
 
-			String text = "uvec" + itos(p_type - SL::TYPE_UINT + 1) + "(";
+			String text = "uvec" + itos(p_type.primitive_type - SL::TYPE_UINT + 1) + "(";
 			for (int i = 0; i < p_values.size(); i++) {
 				if (i > 0)
 					text += ",";
@@ -233,7 +247,7 @@ static String get_constant_text(SL::DataType p_type, const Vector<SL::ConstantNo
 		case SL::TYPE_VEC3:
 		case SL::TYPE_VEC4: {
 
-			String text = "vec" + itos(p_type - SL::TYPE_FLOAT + 1) + "(";
+			String text = "vec" + itos(p_type.primitive_type - SL::TYPE_FLOAT + 1) + "(";
 			for (int i = 0; i < p_values.size(); i++) {
 				if (i > 0)
 					text += ",";
@@ -248,7 +262,7 @@ static String get_constant_text(SL::DataType p_type, const Vector<SL::ConstantNo
 		case SL::TYPE_MAT3:
 		case SL::TYPE_MAT4: {
 
-			String text = "mat" + itos(p_type - SL::TYPE_MAT2 + 2) + "(";
+			String text = "mat" + itos(p_type.primitive_type - SL::TYPE_MAT2 + 2) + "(";
 			for (int i = 0; i < p_values.size(); i++) {
 				if (i > 0)
 					text += ",";
@@ -303,7 +317,7 @@ void ShaderCompilerGLES3::_dump_function_deps(SL::ShaderNode *p_node, const Stri
 
 			if (i > 0)
 				header += ", ";
-			header += _qualstr(fnode->arguments[i].qualifier) + _prestr(fnode->arguments[i].precision) + _typestr(fnode->arguments[i].type) + " " + _mkid(fnode->arguments[i].name);
+			header += _qualstr(fnode->arguments[i].qualifier) + _prestr(fnode->arguments[i].type.precision) + _typestr(fnode->arguments[i].type) + " " + _mkid(fnode->arguments[i].name);
 		}
 
 		header += ")\n";
@@ -371,7 +385,7 @@ String ShaderCompilerGLES3::_dump_node_code(SL::Node *p_node, int p_level, Gener
 					ucode = "uniform ";
 				}
 
-				ucode += _prestr(E->get().precission);
+				ucode += _prestr(E->get().type.precision);
 				ucode += _typestr(E->get().type);
 				ucode += " " + _mkid(E->key());
 
@@ -465,12 +479,12 @@ String ShaderCompilerGLES3::_dump_node_code(SL::Node *p_node, int p_level, Gener
 			}
 #endif
 
-			for (Map<StringName, SL::ShaderNode::Varying>::Element *E = pnode->varyings.front(); E; E = E->next()) {
+			for (Map<StringName, SL::DataType>::Element *E = pnode->varyings.front(); E; E = E->next()) {
 
 				String vcode;
 				String interp_mode = _interpstr(E->get().interpolation);
-				vcode += _prestr(E->get().precission);
-				vcode += _typestr(E->get().type);
+				vcode += _prestr(E->get().precision);
+				vcode += _typestr(E->get());
 				vcode += " " + _mkid(E->key());
 				vcode += ";\n";
 				r_gen_code.vertex_global += interp_mode + "out " + vcode;
@@ -546,7 +560,7 @@ String ShaderCompilerGLES3::_dump_node_code(SL::Node *p_node, int p_level, Gener
 		case SL::Node::TYPE_VARIABLE_DECLARATION: {
 			SL::VariableDeclarationNode *vdnode = (SL::VariableDeclarationNode *)p_node;
 
-			String declaration = _prestr(vdnode->precision) + _typestr(vdnode->datatype);
+			String declaration = _prestr(vdnode->datatype.precision) + _typestr(vdnode->datatype);
 			for (int i = 0; i < vdnode->declarations.size(); i++) {
 				if (i > 0) {
 					declaration += ",";

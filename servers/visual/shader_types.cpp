@@ -46,7 +46,7 @@ const Set<String> &ShaderTypes::get_types() {
 
 ShaderTypes *ShaderTypes::singleton = NULL;
 
-static ShaderLanguage::BuiltInInfo constt(ShaderLanguage::DataType p_type) {
+static ShaderLanguage::BuiltInInfo constt(ShaderLanguage::PrimitiveType p_type) {
 
 	return ShaderLanguage::BuiltInInfo(p_type, true);
 }

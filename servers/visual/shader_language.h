@@ -162,7 +162,7 @@ public:
 #undef TYPE_BOOL
 #endif
 
-	enum DataType {
+	enum PrimitiveType {
 		TYPE_VOID,
 		TYPE_BOOL,
 		TYPE_BVEC2,
@@ -187,6 +187,7 @@ public:
 		TYPE_ISAMPLER2D,
 		TYPE_USAMPLER2D,
 		TYPE_SAMPLERCUBE,
+		TYPE_ARRAY,
 	};
 
 	enum DataPrecision {
@@ -200,6 +201,80 @@ public:
 		INTERPOLATION_FLAT,
 		INTERPOLATION_NO_PERSPECTIVE,
 		INTERPOLATION_SMOOTH,
+	};
+
+	struct DataStructure {
+		enum Type {
+			SCALAR,
+			ARRAY,
+			//TODO: STRUCT,
+		} type;
+	};
+
+	struct DataStructureArray;
+
+	struct DataType {
+		PrimitiveType primitive_type;
+		DataPrecision precision;
+		DataInterpolation interpolation;
+		DataStructure* structure;
+
+		DataType() : primitive_type(TYPE_VOID),
+			precision(PRECISION_DEFAULT),
+			interpolation(INTERPOLATION_FLAT),
+			structure(NULL) {}
+
+		DataType(PrimitiveType p_type) : primitive_type(p_type),
+			precision(PRECISION_DEFAULT),
+			interpolation(INTERPOLATION_FLAT),
+			structure(NULL) {}
+
+		DataType (const DataType &p_type) {
+			primitive_type = p_type.primitive_type;
+			precision = p_type.precision;
+			interpolation = p_type.interpolation;
+			structure = NULL;
+			//Only copy array structure data - scalars don't contain useful info
+			if(p_type.structure && p_type.structure->type == DataStructure::ARRAY) {
+				const DataStructureArray* p_struct = static_cast<DataStructureArray*>(p_type.structure);
+				DataStructureArray* ar_struct = memnew(DataStructureArray);
+				*ar_struct = *p_struct;
+				structure = ar_struct;
+			}
+		}
+
+		~DataType() {
+			memdelete_notnull(structure);
+		}
+
+		bool operator==(const DataType &p_type) const {
+			return primitive_type == p_type.primitive_type && precision == p_type.precision && interpolation == p_type.interpolation;
+		}
+
+		bool operator!=(const DataType &p_type) const {
+			return primitive_type != p_type.primitive_type || precision != p_type.precision || interpolation != p_type.interpolation;
+		}
+
+		void operator=(const DataType &p_type) {
+			primitive_type = p_type.primitive_type;
+			precision = p_type.precision;
+			interpolation = p_type.interpolation;
+
+			//Only copy array structure data - scalars don't contain useful info
+			if(p_type.structure && p_type.structure->type == DataStructure::ARRAY) {
+				const DataStructureArray* p_struct = static_cast<DataStructureArray*>(p_type.structure);
+				DataStructureArray* ar_struct = memnew(DataStructureArray);
+				*ar_struct = *p_struct;
+				structure = ar_struct;
+			}
+		}
+	};
+
+	struct DataStructureArray : public DataStructure {
+		DataType element_type;
+		uint32_t length;
+
+		DataStructureArray() { type = DataStructure::ARRAY; }
 	};
 
 	enum Operator {
@@ -285,7 +360,7 @@ public:
 
 		Type type;
 
-		virtual DataType get_datatype() const { return TYPE_VOID; }
+		virtual DataType get_datatype() const { return DataType(); }
 
 		virtual ~Node() {}
 	};
@@ -303,15 +378,12 @@ public:
 	struct OperatorNode : public Node {
 
 		DataType return_cache;
-		DataPrecision return_precision_cache;
 		Operator op;
 		Vector<Node *> arguments;
 		virtual DataType get_datatype() const { return return_cache; }
 
 		OperatorNode() {
 			type = TYPE_OPERATOR;
-			return_cache = TYPE_VOID;
-			return_precision_cache = PRECISION_DEFAULT;
 		}
 	};
 
@@ -324,13 +396,11 @@ public:
 
 		VariableNode() {
 			type = TYPE_VARIABLE;
-			datatype_cache = TYPE_VOID;
 		}
 	};
 
 	struct VariableDeclarationNode : public Node {
 
-		DataPrecision precision;
 		DataType datatype;
 
 		struct Declaration {
@@ -372,7 +442,6 @@ public:
 
 		struct Variable {
 			DataType type;
-			DataPrecision precision;
 			int line; //for completion
 		};
 
@@ -415,20 +484,16 @@ public:
 			ArgumentQualifier qualifier;
 			StringName name;
 			DataType type;
-			DataPrecision precision;
 		};
 
 		StringName name;
 		DataType return_type;
-		DataPrecision return_precision;
 		Vector<Argument> arguments;
 		BlockNode *body;
 		bool can_discard;
 
 		FunctionNode() {
 			type = TYPE_FUNCTION;
-			return_type = TYPE_VOID;
-			return_precision = PRECISION_DEFAULT;
 			can_discard = false;
 		}
 	};
@@ -440,12 +505,6 @@ public:
 			FunctionNode *function;
 			Set<StringName> uses_function;
 			bool callable;
-		};
-
-		struct Varying {
-			DataType type;
-			DataInterpolation interpolation;
-			DataPrecision precission;
 		};
 
 		struct Uniform {
@@ -468,7 +527,6 @@ public:
 			Vector<uint32_t> array_lengths;
 
 			DataType type;
-			DataPrecision precission;
 			Vector<ConstantNode::Value> default_value;
 			Hint hint;
 			float hint_range[3];
@@ -481,7 +539,7 @@ public:
 			}
 		};
 
-		Map<StringName, Varying> varyings;
+		Map<StringName, DataType> varyings;
 		Map<StringName, Uniform> uniforms;
 		Vector<StringName> render_modes;
 
@@ -532,15 +590,15 @@ public:
 	static DataInterpolation get_token_interpolation(TokenType p_type);
 	static bool is_token_precision(TokenType p_type);
 	static DataPrecision get_token_precision(TokenType p_type);
-	static String get_datatype_name(DataType p_type);
+	static String get_datatype_name(const DataType& p_type);
 	static bool is_token_nonvoid_datatype(TokenType p_type);
 	static bool is_token_operator(TokenType p_type);
 
 	static bool convert_constant(ConstantNode *p_constant, DataType p_to_type, ConstantNode::Value *p_value = NULL);
-	static DataType get_scalar_type(DataType p_type);
-	static int get_cardinality(DataType p_type);
-	static bool is_scalar_type(DataType p_type);
-	static bool is_sampler_type(DataType p_type);
+	static PrimitiveType get_scalar_type(const DataType& p_type);
+	static int get_cardinality(const DataType& p_type);
+	static bool is_scalar_type(const DataType& p_type);
+	static bool is_sampler_type(const DataType& p_type);
 
 	static void get_keyword_list(List<String> *r_keywords);
 	static void get_builtin_funcs(List<String> *r_keywords);
@@ -549,8 +607,8 @@ public:
 		DataType type;
 		bool constant;
 		BuiltInInfo() {}
-		BuiltInInfo(DataType p_type, bool p_constant = false) {
-			type = p_type;
+		BuiltInInfo(PrimitiveType p_type, bool p_constant = false) {
+			type.primitive_type = p_type;
 			constant = p_constant;
 		}
 	};

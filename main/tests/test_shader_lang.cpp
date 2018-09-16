@@ -76,7 +76,7 @@ static String _opstr(SL::Operator p_op) {
 
 static String get_constant_text(SL::DataType p_type, const Vector<SL::ConstantNode::Value> &p_values) {
 
-	switch (p_type) {
+	switch (p_type.primitive_type) {
 		case SL::TYPE_BOOL: return p_values[0].boolean ? "true" : "false";
 		case SL::TYPE_BVEC2: return String() + "bvec2(" + (p_values[0].boolean ? "true" : "false") + (p_values[1].boolean ? "true" : "false") + ")";
 		case SL::TYPE_BVEC3: return String() + "bvec3(" + (p_values[0].boolean ? "true" : "false") + "," + (p_values[1].boolean ? "true" : "false") + "," + (p_values[2].boolean ? "true" : "false") + ")";
@@ -110,7 +110,7 @@ static String dump_node_code(SL::Node *p_node, int p_level) {
 			for (Map<StringName, SL::ShaderNode::Uniform>::Element *E = pnode->uniforms.front(); E; E = E->next()) {
 
 				String ucode = "uniform ";
-				ucode += _prestr(E->get().precission);
+				ucode += _prestr(E->get().type.precision);
 				ucode += _typestr(E->get().type);
 				ucode += " " + String(E->key());
 
@@ -134,11 +134,11 @@ static String dump_node_code(SL::Node *p_node, int p_level) {
 				code += ucode + "\n";
 			}
 
-			for (Map<StringName, SL::ShaderNode::Varying>::Element *E = pnode->varyings.front(); E; E = E->next()) {
+			for (Map<StringName, SL::DataType>::Element *E = pnode->varyings.front(); E; E = E->next()) {
 
 				String vcode = "varying ";
-				vcode += _prestr(E->get().precission);
-				vcode += _typestr(E->get().type);
+				vcode += _prestr(E->get().precision);
+				vcode += _typestr(E->get());
 				vcode += " " + String(E->key());
 
 				code += vcode + "\n";
@@ -153,7 +153,7 @@ static String dump_node_code(SL::Node *p_node, int p_level) {
 
 					if (i > 0)
 						header += ", ";
-					header += _prestr(fnode->arguments[i].precision) + _typestr(fnode->arguments[i].type) + " " + fnode->arguments[i].name;
+					header += _prestr(fnode->arguments[i].type.precision) + _typestr(fnode->arguments[i].type) + " " + fnode->arguments[i].name;
 				}
 
 				header += ")\n";
@@ -173,7 +173,7 @@ static String dump_node_code(SL::Node *p_node, int p_level) {
 			code += _mktab(p_level - 1) + "{\n";
 			for (Map<StringName, SL::BlockNode::Variable>::Element *E = bnode->variables.front(); E; E = E->next()) {
 
-				code += _mktab(p_level) + _prestr(E->get().precision) + _typestr(E->get().type) + " " + E->key() + ";\n";
+				code += _mktab(p_level) + _prestr(E->get().type.precision) + _typestr(E->get().type) + " " + E->key() + ";\n";
 			}
 
 			for (int i = 0; i < bnode->statements.size(); i++) {
@@ -318,7 +318,7 @@ MainLoop *test() {
 	print_line("tokens:\n\n" + sl.token_debug(code));
 
 	Map<StringName, SL::FunctionInfo> dt;
-	dt["fragment"].built_ins["ALBEDO"] = SL::TYPE_VEC3;
+	dt["fragment"].built_ins["ALBEDO"].type.primitive_type = SL::TYPE_VEC3;
 	dt["fragment"].can_discard = true;
 
 	Vector<StringName> rm;
